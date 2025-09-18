@@ -14,7 +14,7 @@ def _create_departments(cloud_token: BitrixToken, box_token: BitrixToken) -> lis
 
         origin_departments = cloud_token.call_list_method("department.get")
         destination_departments = box_token.call_list_method("department.get")
-        box_department_ids = set([int(department['ID']) for department in destination_departments])
+        box_department_ids = set(int(department['ID']) for department in destination_departments)
 
         for department in origin_departments:
             if origin_destination_map.get(int(department["ID"])) not in box_department_ids:
@@ -29,7 +29,7 @@ def _create_departments(cloud_token: BitrixToken, box_token: BitrixToken) -> lis
         batch_and_result = box_token.batch_api_call(methods)
 
         # {origin_id: destination_id}
-        origin_destintaion_map = {str(cloud_id): str(box_entity["result"]) for cloud_id, box_entity in batch_and_result.successes.items()}
+        origin_destintaion_map: dict[str, str] = {str(cloud_id): str(box_entity["result"]) for cloud_id, box_entity in batch_and_result.successes.items()}
 
         bulk_data = [Department(origin_id=cloud_id, destination_id=destination_id) for cloud_id, destination_id in origin_destintaion_map.items()]
         Department.objects.bulk_create(
@@ -47,7 +47,7 @@ def _create_departments(cloud_token: BitrixToken, box_token: BitrixToken) -> lis
 
 
 def _structure_departments(box_token: BitrixToken, origin_departments: list[dict]):
-    """"""
+    """Синхронизация структуры и руководителей отделов"""
     origin_destination_user_map: dict[int, int] = dict(User.objects.all().values_list("origin_id", "destination_id"))
     origin_destination_department_map: dict[int, int] = dict(Department.objects.all().values_list("origin_id", "destination_id"))
 
@@ -55,12 +55,13 @@ def _structure_departments(box_token: BitrixToken, origin_departments: list[dict
 
     try:
         for department in origin_departments:
-            if department.get("PARENT") and department.get("UF_HEAD"):
 
+            # В корневой отдел установить руководителя нужно вручную!
+            if department.get("PARENT") and department.get("UF_HEAD") and origin_destination_user_map.get(int(department.get("UF_HEAD"))):
                 params = {
                     "ID": origin_destination_department_map[int(department["ID"])],
                     "PARENT": origin_destination_department_map[int(department.get("PARENT"))],
-                    # "UF_HEAD": origin_destination_user_map[int(department.get("UF_HEAD"))]  # todo внести в функцию когда будут юзера.
+                    "UF_HEAD": origin_destination_user_map[int(department.get("UF_HEAD"))],
                 }
 
                 methods.append((department["ID"], "department.update", params))

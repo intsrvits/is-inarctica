@@ -24,8 +24,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-
-    "inarctica_migration",
+    'integration_utils.bitrix24',
+    'inarctica_migration',
 ]
 
 MIDDLEWARE = [

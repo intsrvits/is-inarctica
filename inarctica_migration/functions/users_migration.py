@@ -4,7 +4,7 @@ import re
 
 import requests
 
-from integration_utils.bitrix24.exceptions import BitrixApiException
+from integration_utils.bitrix24.exceptions import BitrixApiException, BitrixApiError
 
 from inarctica_migration.functions.helpers import retry_decorator
 from inarctica_migration.models import User, Department
@@ -13,7 +13,7 @@ from inarctica_migration.utils import CloudBitrixToken, BoxBitrixToken
 
 @retry_decorator(3, exceptions=(BitrixApiException,), delay=10)
 def _add_user(but, params):
-    return but.call_api_method('user.add', params)
+    return but.call_api_method('user.add', params)['result']
 
 
 def _get_file_pair(url: str):
@@ -67,16 +67,22 @@ def migrate_users():
         # {origin_id : destination_id}
         origin_destination_map: dict[int, int] = dict(User.objects.all().values_list('origin_id', 'destination_id'))
 
-        cloud_users = cloud_token.call_list_method('user.get', {'ACTIVE': 1})
-        box_users = box_token.call_list_method('user.get')
+        cloud_users = cloud_token.call_list_method('user.get', {'filter': {'ACTIVE': 1, '!USER_TYPE': 'extranet'}, 'ADMIN_MODE': 1})
+        box_users = box_token.call_list_method('user.get', {'ADMIN_MODE': 1})
         box_user_ids = set([int(user['ID']) for user in box_users])
 
-        i = 0
-        for user in cloud_users:
+        # {}
+        email_destination_id_map = {user.get('EMAIL').replace('@russaquaculture.ru', '@inarctica.com'): int(user['ID']) for user in box_users}
+
+        for idx, user in enumerate(cloud_users, start=1):
+            if not user.get('EMAIL'):
+                continue
+
+            email = user.get('EMAIL').replace('@russaquaculture.ru', '@inarctica.com')
+
             if origin_destination_map.get(int(user["ID"])) not in box_user_ids:
-                i += 1
                 params = {
-                    "EMAIL": user.get('EMAIL').replace('@russaquaculture.ru', '@inarctica.com'),
+                    "EMAIL": email,
                     "NAME": user.get('NAME'),
                     "LAST_NAME": user.get('LAST_NAME'),
                     "SECOND_NAME": user.get('SECOND_NAME'),
@@ -127,7 +133,10 @@ def migrate_users():
                     "UF_PHONE_INNER": user.get('UF_PHONE_INNER'),
                 }
 
-                destination_id = box_token.call_api_method('user.add', params)['result']
+                if email in email_destination_id_map:
+                    destination_id = email_destination_id_map[email]
+                else:
+                    destination_id = _add_user(box_token, params)
 
                 bulk_data.append(User(
                     origin_id=int(user['ID']),
@@ -141,7 +150,7 @@ def migrate_users():
             update_conflicts=True,
         )
 
-        return (f"Создано {i} user, всего блоы {len(cloud_users)} ")
+        return (f"Создано {idx} user, всего  {len(cloud_users)} ")
 
     except Exception as exc:
         User.objects.bulk_create(
