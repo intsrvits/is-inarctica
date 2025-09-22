@@ -125,6 +125,7 @@ def _add_users(cloud_token: CloudBitrixToken, box_token: BoxBitrixToken):
 
 def migrate_group():
     """Полный цикл миграции групп"""
+
     cloud_token = CloudBitrixToken()
     box_token = BoxBitrixToken()
 
