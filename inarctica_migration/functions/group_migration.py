@@ -1,18 +1,18 @@
 from inarctica_migration.models import Group, User
 from inarctica_migration.utils import CloudBitrixToken, BoxBitrixToken
-from integration_utils.bitrix24.bitrix_token import BitrixToken
 
 SELECT_FIELDS = ("ID", "ACTIVE", "SITE_ID", "SUBJECT_ID", "SUBJECT_DATA", "NAME", "DESCRIPTION", "KEYWORDS", "CLOSED", "VISIBLE",
-                 "OPENED", "PROJECT", "LANDING", "DATE_CREATE", "DATE_UPDATE", "DATE_ACTIVITY", "IMAGE_ID", "AVATAR",  "AVATAR_TYPE", "AVATAR_TYPES",
+                 "OPENED", "PROJECT", "LANDING", "DATE_CREATE", "DATE_UPDATE", "DATE_ACTIVITY", "IMAGE_ID", "AVATAR", "AVATAR_TYPE", "AVATAR_TYPES",
                  "OWNER_ID", "OWNER_DATA", "NUMBER_OF_MEMBERS", "NUMBER_OF_MODERATORS", "INITIATE_PERMS", "PROJECT_DATE_START",
                  "PROJECT_DATE_FINISH", "SEARCH_INDEX", "SCRUM_OWNER_ID", "SCRUM_MASTER_ID", "SCRUM_SPRINT_DURATION",
                  "SCRUM_TASK_RESPONSIBLE", "TYPE", "UF_SG_DEPT", "TAGS", "ACTIONS", "USER_DATA")
 
 
-def _create_groups(cloud_token: BitrixToken, box_token: BitrixToken):
+def _create_groups(cloud_token: CloudBitrixToken, box_token: BoxBitrixToken):
     """Создаёт группы, которые есть на cloud-портале, но нет на box-портале"""
 
     bulk_data = []
+
     try:
         # {origin_id : destination_id}
         group_origin_destination_map: dict[int, int] = dict(Group.objects.all().values_list("origin_id", "destination_id"))
@@ -42,6 +42,7 @@ def _create_groups(cloud_token: BitrixToken, box_token: BitrixToken):
         destination_groups = box_token.call_list_method("socialnetwork.api.workgroup.list", params_to_select)["workgroups"]
 
         box_group_ids = set(int(group["id"]) for group in destination_groups)
+
         for group in origin_groups:
             _SCRUM_MASTER_ID = None
 
@@ -88,6 +89,40 @@ def _create_groups(cloud_token: BitrixToken, box_token: BitrixToken):
         raise
 
 
+def _add_users(cloud_token: CloudBitrixToken, box_token: BoxBitrixToken):
+    """Добавляет в группы пользователей и обновляет им роль"""
+
+    methods_to_get, methods_to_add, methods_to_update = [], [], []
+
+    try:
+        # {origin_id : destination_id}
+        group_origin_destination_map: dict[int, int] = dict(Group.objects.all().values_list("origin_id", "destination_id"))
+        user_origin_destination_map: dict[int, int] = dict(User.objects.all().values_list("origin_id", "destination_id"))
+
+        # Забираем всех информацию о пользователях из всех групп
+        for origin_group_id in group_origin_destination_map:
+            methods_to_get.append((str(origin_group_id), "sonet_group.user.get", {"ID": origin_group_id}))
+
+        # {"group_id": [{"USER_ID1": "USER_ROLE1", ...}], ...}
+        batch_taking_users = cloud_token.batch_api_call(methods_to_get)
+
+        # Проходимся по всем группам и заполняем methods для батча на добавление и на обновление.
+        for group_id, attributes in batch_taking_users.successes.items():
+            destination_group_id = group_origin_destination_map.get(int(group_id))
+            users_in_cloud_group = attributes['result']
+
+            for user in users_in_cloud_group:
+                destination_user_id = user_origin_destination_map.get(int(user["USER_ID"]))
+                methods_to_add.append(("sonet_group.user.add", {"GROUP_ID": destination_group_id, "USER_ID": destination_user_id}))
+                methods_to_update.append(("sonet_group.user.update", {"GROUP_ID": destination_group_id, "USER_ID": destination_user_id, "ROLE": user["ROLE"]}))
+
+        box_token.batch_api_call(methods_to_add)
+        box_token.batch_api_call(methods_to_update)
+
+    except Exception as exc:
+        print(f"Произошла ошибка во время добавления пользователей в группы: {str(exc)}")
+
+
 def migrate_group():
     """Полный цикл миграции групп"""
     cloud_token = CloudBitrixToken()
@@ -95,5 +130,8 @@ def migrate_group():
 
     # Создаём группы
     _create_groups(cloud_token, box_token)
+
+    # Добавляем пользователей в группы и задаём им роли
+    _add_users(cloud_token, box_token)
 
     return "success"
