@@ -1,11 +1,9 @@
 from typing import Union
 
 from inarctica_migration.functions.helpers import retry_decorator
-from inarctica_migration.models import Group, User, Storage
+from inarctica_migration.models import Group, User, Storage, Folder
 from inarctica_migration.utils import CloudBitrixToken, BoxBitrixToken
 from integration_utils.bitrix24.bitrix_token import BitrixToken
-
-_MAIN_DISK_STORAGE_ID = 19
 
 
 @retry_decorator(attempts=3, delay=30)
@@ -16,10 +14,26 @@ def _bx_storage_getlist(token: CloudBitrixToken | BoxBitrixToken) -> Union[list,
 
 
 @retry_decorator(attempts=3, delay=30)
-def _bx_folder_getchildren(token: CloudBitrixToken | BoxBitrixToken, parent_id: int) -> Union[list, dict]:
+def _bx_folder_getchildren(
+        token: CloudBitrixToken | BoxBitrixToken,
+        parent_id: int,
+        filter: dict = None,
+        select: list = None,
+) -> Union[list, dict]:
     """"""
 
-    return token.call_list_method("disk.folder.getchildren", {"id": parent_id, "filter": {"type": "folder"}, "select": ["ID", "PARENT_ID"]}, timeout=100)
+    return token.call_list_method("disk.folder.getchildren", {"id": parent_id, "filter": filter, "select": select}, timeout=100)
+
+
+@retry_decorator(attempts=3, delay=30)
+def _bx_folder_get(
+        token: CloudBitrixToken,
+        filter: dict = None,
+        select: list = None,
+) -> Union[list, dict]:
+    """"""
+
+    return token.call_list_method("disk.folder.get")
 
 
 def _synchronize_storages(cloud_token: CloudBitrixToken, box_token: BoxBitrixToken):
@@ -62,54 +76,100 @@ def _synchronize_storages(cloud_token: CloudBitrixToken, box_token: BoxBitrixTok
         return unique_bulk_data
 
 
-def _folders_recursive_descent(cloud_token: CloudBitrixToken, cloud_parent_id: int, root: bool = False):
-    """"""
+def _folders_recursive_descent(cloud_token: CloudBitrixToken, cloud_parent_id: int, result: Union[dict, None] = None):
+    """
+    Рекурсивно строит плоскую структуру вида:
+    {parent_id: [child_id1, child_id2, ...]}
+    """
+    if result is None:
+        result = {}
+
     try:
-        nested_folders = _bx_folder_getchildren(cloud_token, cloud_parent_id)
+        nested_folders = _bx_folder_getchildren(
+            cloud_token,
+            cloud_parent_id,
+            filter={"type": "folder"},
+            select=["ID", "PARENT_ID"]
+        )
 
-        if not nested_folders:
-            return {}
+        # добавляем прямых детей
+        child_ids = [int(folder["ID"]) for folder in nested_folders]
+        result[cloud_parent_id] = child_ids
 
-        children = {}
+        # рекурсия для детей
         for folder in nested_folders:
             folder_id = int(folder["ID"])
-            children[folder_id] = _folders_recursive_descent(cloud_token, folder_id)
+            _folders_recursive_descent(cloud_token, folder_id, result)
 
-        if root:
-            return {cloud_parent_id: children}
-        return children
+        return result
 
     except Exception as exc:
-        print(f"Произошла ошибка в _folders_recursive_descent (при построении древовидной структуры): {exc}")
+        print(f"Ошибка в _folders_recursive_descent: {exc}")
         raise
 
-def _extract_keys(tree: dict) -> list[int]:
-    """"""
-    try:
-        keys = []
-
-        for key, value in tree.items():
-            keys.append(key)
-            if isinstance(value, dict):
-                keys.extend(_extract_keys(value))
-
-        return keys
-
-    except Exception as exc:
-        print(f"Произошла ошибка в функции _extract_keys (при преобразовании древовидной структуры в плоский список): {exc}")
-        raise
 
 def _synchronize_folders_for_storage(cloud_token: CloudBitrixToken, box_token: BoxBitrixToken, cloud_storage_id: int, storage_relation_map: dict[int, int]):
     """Создаём недостающие папки"""
+    taking_methods = []
+    adding_methods = []
 
-    folder_tree_structure:dict = _folders_recursive_descent(cloud_token, cloud_storage_id, root=True)
-    origin_folder_list:list[int] = _extract_keys(folder_tree_structure)
+    # folders_to_add: dict[str, list] = dict()
 
-    for folder in folder_tree_structure:
-        ...
+    folders_relation_map: dict[int, int] = dict(Folder.objects.all().values_list("origin_id", "destination_id", ))
 
+    folder_tree_structure: dict = _folders_recursive_descent(cloud_token, cloud_storage_id)
+    origin_folder_id_list: list[int] = list(folder_tree_structure.keys())
 
-    return folder_tree_structure, origin_folder_list
+    # Те которые мы создаём в процессе чтобы не грузить бд на каждом цикле
+    dynamic_created_folders: dict = folders_relation_map
+    try:
+        #todo делать пропуск если в бд уже естановлена связь для foldов
+        for folder_id in origin_folder_id_list:
+            taking_methods.append((str(folder_id), "disk.folder.get", {'id': folder_id}))
+
+        batch_result = cloud_token.batch_api_call(taking_methods)
+
+        for folder_id, folder_attributes in batch_result.successes.items():
+
+            if not folder_attributes["result"]["PARENT_ID"]:
+                dynamic_created_folders[int(folder_id)] = storage_relation_map[int(folder_id)]
+                continue
+
+            else:
+                parent_id = dynamic_created_folders[int(folder_attributes["result"]["PARENT_ID"])]
+                origin_folder_id_list = origin_folder_id_list[1:]
+
+            name = batch_result.successes[str(origin_folder_id_list[0])]['result']['NAME']
+            params = {"id": parent_id, "data": {"NAME": name}}
+            result = box_token.call_api_method("disk.folder.addsubfolder", params)
+            dynamic_created_folders[int(folder_id)] = result["result"]['ID']
+
+            # if storage_relation_map.get(int(folder_id)):
+            #     origin_folder_id_list = origin_folder_id_list[1:]
+            #     name = batch_result.successes[str(origin_folder_id_list[0])]['result']['NAME']
+            #     origin_folder_id_list = origin_folder_id_list[1:]
+            #     params = {"id": storage_relation_map[int(folder_id)], "data": {"NAME": name}}
+            #
+            # else:
+            #     name = batch_result.successes[str(origin_folder_id_list[0])]['result']['NAME']
+            #     origin_folder_id_list = origin_folder_id_list[1:]
+            #     params = {"id": dynamic_created_folders[int(folder_id)], "data": {"NAME": name}}
+            #
+            # result = box_token.call_api_method("disk.folder.addsubfolder", params)
+
+            # print(folder_id, {"id": storage_relation_map[folder_id], "data": {"NAME": folder_attributes['result']["NAME"]}})
+            # folders_to_add = []
+
+        return result
+
+    except Exception as exc:
+        print(f"Произошла ошибка в _synchronize_folders_for_storage (при синхронизации) : {exc}")
+        raise
+
+    # for folder in folder_tree_structure:
+    #     ...
+
+    # return folder_tree_structure, origin_folder_list
     # Сначала создать все папки которые существуют на облаке
 
     # Затем пробежаться по их parent и расставить в правильном порядке
@@ -131,8 +191,8 @@ def migrate_disk():
     storage_relation_map: dict[int, int] = dict(Storage.objects.all().values_list("origin_id", "destination_id"))
 
     for storage_relation in storage_relation_map:
-        #todo убрать хардкод пока берем только 19ый (общий диск)
-        if storage_relation != 19:
+        #todo убрать хардкод (пока тестим на своих дисках)
+        if storage_relation != 25893:
             continue
 
         res = _synchronize_folders_for_storage(
@@ -142,5 +202,4 @@ def migrate_disk():
             storage_relation_map=storage_relation_map,
         )
 
-    print(res)
-    return res
+        return res
