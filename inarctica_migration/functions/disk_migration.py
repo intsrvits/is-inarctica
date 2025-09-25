@@ -91,7 +91,6 @@ def _synchronize_storages(
         debug_point(f"Обработано (создано) {len(unique_bulk_data)} связей между хранилищами. Всего связей {len(storage_relation_map)}", with_tags=False)
         return storage_relation_map
 
-
 def _folders_recursive_descent(
         cloud_token: CloudBitrixToken,
         cloud_parent_id: int,
@@ -117,7 +116,7 @@ def _folders_recursive_descent(
             cloud_token,
             cloud_parent_id,
             filter={"type": "folder"},
-            select=["ID", "PARENT_ID"]
+            select=["ID", "REAL_OBJECT_ID", "PARENT_ID"]
         )
 
         # Добавляем прямых детей
@@ -137,6 +136,17 @@ def _folders_recursive_descent(
         raise
 
 
+def ordered_hierarchy(structure):
+    result = []
+    for parent_id, children_id in structure.items():
+        if not parent_id in result:
+            result.append(parent_id)
+        for child_id in children_id:
+            if not child_id in result:
+                result.append(child_id)
+
+    return result
+
 def _synchronize_folders_for_storage(
         cloud_token: CloudBitrixToken,
         box_token: BoxBitrixToken,
@@ -153,7 +163,7 @@ def _synchronize_folders_for_storage(
     folders_relation_map: dict[int, int] = dict(Folder.objects.all().values_list("origin_id", "destination_id"))
 
     folder_tree_structure: dict = _folders_recursive_descent(cloud_token, cloud_storage_id)
-    origin_folder_id_list: list[int] = list(folder_tree_structure.keys())
+    origin_folder_id_list: list[int] = ordered_hierarchy(folder_tree_structure)
 
     try:
         # Забираем все найденные в хранилище папки (в т.ч. вложенные)
@@ -164,29 +174,35 @@ def _synchronize_folders_for_storage(
 
         # Для всех папок создаём подобные на бокс портале
         for folder_id, folder_attributes in all_cloud_storage_folders.successes.items():
+            cloud_real_object_id = folder_attributes["result"]["REAL_OBJECT_ID"]
 
             # Поведение если папка уже перенесенна и её связи записаны в бд
-            if int(folder_attributes["result"]["ID"]) in folders_relation_map:
+            if int(folder_attributes["result"]["REAL_OBJECT_ID"]) in folders_relation_map:
+                origin_folder_id_list = origin_folder_id_list[1:]
                 continue
 
             # Поведение при папка-хранилище (самой верхней папке в хранилище)
             if not folder_attributes["result"]["PARENT_ID"]:
-                folders_relation_map[int(folder_id)] = storage_relation_map[int(folder_id)]
+                folders_relation_map[int(cloud_real_object_id)] = storage_relation_map[int(cloud_real_object_id)]
+                origin_folder_id_list = origin_folder_id_list[1:]
                 continue
 
             # Поведение при всех вложенных папок
             else:
+
                 cloud_parent_id = int(folder_attributes["result"]["PARENT_ID"])
                 box_parent_id = folders_relation_map[cloud_parent_id]
-                origin_folder_id_list = origin_folder_id_list[1:]
+
 
             name = all_cloud_storage_folders.successes[str(origin_folder_id_list[0])]['result']['NAME']
+            origin_folder_id_list = origin_folder_id_list[1:]
+
             params = {"id": box_parent_id, "data": {"NAME": name}}
 
             addsubfolder_result = _bx_folder_addsubfolder(box_token, params)
-            added_box_folder_id = addsubfolder_result["result"]['ID']
+            added_box_folder_id = addsubfolder_result["result"]["REAL_OBJECT_ID"]
 
-            folders_relation_map[int(folder_id)] = added_box_folder_id
+            folders_relation_map[int(cloud_real_object_id)] = added_box_folder_id
             bulk_data.append(
                 Folder(
                     origin_id=folder_id,
@@ -237,7 +253,7 @@ def migrate_disk():
     # Воссоздание структуры папок для КАЖДОГО из хранилищ
     for storage_relation in storage_relation_map:
         #todo убрать хардкод (пока тестим на своих дисках)
-        if storage_relation != 1:
+        if storage_relation != 19:
             continue
 
         _synchronize_folders_for_storage(
