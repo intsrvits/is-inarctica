@@ -1,9 +1,8 @@
 from typing import Union
 
-from inarctica_migration.functions.helpers import retry_decorator
+from inarctica_migration.functions.helpers import retry_decorator, async_debug_point, debug_point
 from inarctica_migration.models import Storage, Folder
 from inarctica_migration.utils import CloudBitrixToken, BoxBitrixToken
-from integration_utils.bitrix24.bitrix_token import BitrixToken
 
 
 @retry_decorator(attempts=3, delay=30)
@@ -24,6 +23,15 @@ def _bx_folder_getchildren(
     return token.call_list_method("disk.folder.getchildren", {"id": parent_id, "filter": filter, "select": select}, timeout=100)
 
 
+@retry_decorator(attempts=3, delay=30)
+def _bx_folder_addsubfolder(
+        token: BoxBitrixToken,
+        params: dict,
+) -> dict:
+    """Запрос disk.folder.addsubfolder к REST API"""
+    return token.call_api_method("disk.folder.addsubfolder", params)
+
+
 def _synchronize_storages(
         cloud_token: CloudBitrixToken,
         box_token: BoxBitrixToken
@@ -33,6 +41,8 @@ def _synchronize_storages(
 
     После завершения работы в бд появляются записи об одинаковых хранилищах: origin_id, destination_id
     """
+    cloud_storage_obj_id, box_storage_obj_id = None, None
+
     bulk_data = []
 
     storage_relation_map: dict[int, int] = dict(Storage.objects.all().values_list("origin_id", "destination_id"))
@@ -61,7 +71,7 @@ def _synchronize_storages(
                         storage_relation_map[cloud_storage_obj_id] = box_storage_obj_id
 
     except Exception as exc:
-        print(f"Произошла ошибка во время синхронизации хранилищ: {exc}")
+        debug_point(f"Произошла ошибка во время синхронизации облачного хранилища с ID {cloud_storage_obj_id} и коробочного с ID {box_storage_obj_id}: {exc}", with_tags=True)
         raise
 
     finally:
@@ -78,7 +88,7 @@ def _synchronize_storages(
             update_conflicts=True,
         )
 
-        print(f"Обработано (создано) {len(unique_bulk_data)} связей между хранилищами. Всего связей {len(storage_relation_map)}")
+        debug_point(f"Обработано (создано) {len(unique_bulk_data)} связей между хранилищами. Всего связей {len(storage_relation_map)}", with_tags=False)
         return storage_relation_map
 
 
@@ -122,7 +132,8 @@ def _folders_recursive_descent(
         return result
 
     except Exception as exc:
-        print(f"Ошибка в _folders_recursive_descent: {exc}")
+
+        debug_point(f"Ошибка в _folders_recursive_descent для корневой папки с облачным ID={cloud_parent_id}: {exc}", with_tags=True)
         raise
 
 
@@ -172,7 +183,7 @@ def _synchronize_folders_for_storage(
             name = all_cloud_storage_folders.successes[str(origin_folder_id_list[0])]['result']['NAME']
             params = {"id": box_parent_id, "data": {"NAME": name}}
 
-            addsubfolder_result = box_token.call_api_method("disk.folder.addsubfolder", params)
+            addsubfolder_result = _bx_folder_addsubfolder(box_token, params)
             added_box_folder_id = addsubfolder_result["result"]['ID']
 
             folders_relation_map[int(folder_id)] = added_box_folder_id
@@ -192,7 +203,7 @@ def _synchronize_folders_for_storage(
             update_fields=["destination_id", "parent_origin_id", "parent_destination_id"],
             update_conflicts=True,
         )
-        print(f"Произошла ошибка в _synchronize_folders_for_storage (при синхронизации) : {exc}")
+        debug_point(f"Произошла ошибка в _synchronize_folders_for_storage (при синхронизации) : {exc}")
         raise
 
     finally:
@@ -204,7 +215,7 @@ def _synchronize_folders_for_storage(
         )
 
         # len(folder_tree_structure) - 1 (Потому что мы не учитываем само хранилище, которое отдаётся нам как папка при запросе в битрикс)
-        print(f"Создано новых {len(bulk_data)} папок. Всего папок на в этом хранилище: {len(folder_tree_structure)-1}")
+        print(f"Создано новых {len(bulk_data)} папок. Всего папок на в этом хранилище: {len(folder_tree_structure) - 1}")
         return
 
 
