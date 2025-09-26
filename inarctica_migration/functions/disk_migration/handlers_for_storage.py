@@ -42,6 +42,7 @@ def _synchronize_storages(
 
                 if cloud_storage['ENTITY_TYPE'] == 'user':
                     same_entity_condition = users_cloud_box_map.get(int(cloud_storage['ENTITY_ID'])) == int(box_storage['ENTITY_ID'])
+                    #same_entity_condition = False #todo хардкод
                 elif cloud_storage['ENTITY_TYPE'] == 'group':
                     same_entity_condition = groups_cloud_box_map.get(int(cloud_storage['ENTITY_ID'])) == int(box_storage['ENTITY_ID'])
                 elif cloud_storage['ENTITY_TYPE'] == 'common':
@@ -86,4 +87,8 @@ def _synchronize_storages(
 
         print(f"Создано {len(unique_bulk_data)} связей между хранилищами. Всего связей {len(storage_relation_map)}")
         debug_point(f"Создано {len(unique_bulk_data)} связей между хранилищами. Всего связей {len(storage_relation_map)}", with_tags=False)
-        return storage_relation_map
+
+        # возвращаем только те которые не синхронизированы
+        storage_not_sync_folders = dict(Storage.objects.filter(folders_sync=False).values_list("cloud_id", "box_id"))
+
+        return storage_relation_map, storage_not_sync_folders

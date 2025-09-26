@@ -23,6 +23,7 @@ def clear_all_storages():
 
     # Удаление всех папок хранилища папок
     for storage_relation in storage_relation_map:
+
         delete_folders_for_storage(box_token, storage_relation_map[storage_relation])
 
 
@@ -39,17 +40,14 @@ def migrate_disk():
 
     # Настройка связей между хранилищами
     # {origin_id: destination_id, ...}
-    storage_relation_map: dict[int, int] = _synchronize_storages(cloud_token=cloud_token, box_token=box_token)
+    storage_relation_map, storage_not_sync_folders = _synchronize_storages(cloud_token=cloud_token, box_token=box_token)
 
     # Воссоздание структуры папок для КАЖДОГО из хранилищ
-    for storage_relation in storage_relation_map:
+    for storage_relation in storage_not_sync_folders:
+        if storage_relation in [19, 67]:
         #todo убрать хардкод (пока тестим на своих дисках)
-        if storage_relation in [
-            #16989, 14235, 14093,
-                                14071]:
             _synchronize_folders_for_storage(
                 cloud_token=cloud_token,
                 box_token=box_token,
                 cloud_storage_id=storage_relation,
-                storage_relation_map=storage_relation_map,
             )

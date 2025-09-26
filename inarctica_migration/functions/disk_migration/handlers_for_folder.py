@@ -10,18 +10,20 @@ def _synchronize_folders_for_storage(
         cloud_token: CloudBitrixToken,
         box_token: BoxBitrixToken,
         cloud_storage_id: int,
-        storage_relation_map: dict[int, int]
 ):
     """
 
 
     """
+    group_folders_cnt = 0
     taking_methods = []
     bulk_data = []
 
+    storage_relation_map: dict[int, int] = dict(Storage.objects.all().values_list("cloud_id", "box_id"))
     folders_relation_map: dict[int, int] = dict(Folder.objects.all().values_list("real_obj_cloud_id", "real_obj_box_id"))
+    merged_relation_map = {**storage_relation_map, **folders_relation_map}
 
-    origin_folder_id_list: list[int] = ordered_hierarchy(cloud_token, 'folder', cloud_storage_id)
+    origin_folder_id_list: list[int] = ordered_hierarchy(cloud_token, 'folder', cloud_storage_id)[1:]
     storage = Storage.objects.get(cloud_id=cloud_storage_id)
 
     # len(origin_folder_id_list) - 1 (Потому что мы не учитываем само хранилище, которое отдаётся нам как папка при запросе в битрикс)
@@ -39,31 +41,34 @@ def _synchronize_folders_for_storage(
             cloud_real_object_id = folder_attributes["result"]["REAL_OBJECT_ID"]
 
             # Поведение если папка уже перенесена и её связи записаны в бд
-            if int(folder_attributes["result"]["REAL_OBJECT_ID"]) in folders_relation_map:
+            if int(folder_attributes["result"]["REAL_OBJECT_ID"]) in merged_relation_map:
                 origin_folder_id_list = origin_folder_id_list[1:]
                 continue
 
             # Поведение при папка-хранилище (самой верхней папке в хранилище)
             if not folder_attributes["result"]["PARENT_ID"]:
-                folders_relation_map[int(cloud_real_object_id)] = storage_relation_map[int(cloud_real_object_id)]
+                merged_relation_map[int(cloud_real_object_id)] = storage_relation_map[int(cloud_real_object_id)]
                 origin_folder_id_list = origin_folder_id_list[1:]
                 continue
 
             # Поведение при всех вложенных папок
             else:
-
                 cloud_parent_id = int(folder_attributes["result"]["PARENT_ID"])
-                box_parent_id = folders_relation_map[cloud_parent_id]
+                box_parent_id = merged_relation_map[cloud_parent_id]
 
             name = all_cloud_storage_folders.successes[str(origin_folder_id_list[0])]['result']['NAME']
             origin_folder_id_list = origin_folder_id_list[1:]
 
             params = {"id": box_parent_id, "data": {"NAME": name}}
 
+            if folder_attributes["result"]["ID"] != folder_attributes["result"]["REAL_OBJECT_ID"]:
+                group_folders_cnt += 1
+                continue
+
             addsubfolder_result = _bx_folder_addsubfolder(box_token, params)
             added_box_folder_id = addsubfolder_result["result"]["REAL_OBJECT_ID"]
 
-            folders_relation_map[int(cloud_real_object_id)] = added_box_folder_id
+            merged_relation_map[int(cloud_real_object_id)] = added_box_folder_id
             bulk_data.append(
                 Folder(
                     cloud_id=folder_id,
@@ -73,7 +78,7 @@ def _synchronize_folders_for_storage(
                     real_obj_cloud_id=cloud_real_object_id,
                     real_obj_box_id=added_box_folder_id,
                     parent_real_obj_cloud_id=folder_attributes["result"]["REAL_OBJECT_ID"],
-                    parent_real_obj_box_id=folders_relation_map[int(folder_attributes["result"]["REAL_OBJECT_ID"])],
+                    parent_real_obj_box_id=merged_relation_map[int(folder_attributes["result"]["REAL_OBJECT_ID"])],
                 )
             )
 
@@ -98,12 +103,13 @@ def _synchronize_folders_for_storage(
             update_conflicts=True,
         )
 
-        if (storage.folders_in_box + len(bulk_data)) == storage.folders_in_cloud:
+        storage.folders_in_box += len(bulk_data)
+        if storage.folders_in_box == storage.folders_in_cloud:
             storage.folders_sync = True
 
         storage.save()
 
-        debug_point(f"Создание папок. Хранилище с boxRealObjID {storage.box_id:<5} | Cоздано новых: {len(bulk_data):<3} | Сейчас на коробке: {storage.folders_in_box + len(bulk_data):<3} | Всего на облаке {storage.folders_in_cloud:<3}", with_tags=False)
+        debug_point(f"Создание папок. Хранилище с boxRealObjID {storage.box_id:<5} | Cоздано новых: {len(bulk_data):<3} | Сейчас на коробке: {storage.folders_in_box + len(bulk_data):<3} | Всего на облаке {storage.folders_in_cloud:<3} | Системных {group_folders_cnt}", with_tags=False)
         return
 
 
