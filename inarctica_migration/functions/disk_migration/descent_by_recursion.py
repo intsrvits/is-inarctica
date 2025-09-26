@@ -1,12 +1,12 @@
 from typing import Union
 
-from inarctica_migration.utils import CloudBitrixToken
+from inarctica_migration.utils import CloudBitrixToken, BoxBitrixToken
 from inarctica_migration.functions.helpers import debug_point
 from inarctica_migration.functions.disk_migration.bx_rest_requests import _bx_folder_getchildren
 
 
-def _recursive_descent(
-        cloud_token: CloudBitrixToken,
+def recursive_descent(
+        token: Union[CloudBitrixToken, BoxBitrixToken],
         object_type: str,  # todo сделать аннотацию и переписать докстринг
         cloud_parent_id: int,
         result: Union[dict, None] = None
@@ -28,7 +28,7 @@ def _recursive_descent(
 
     try:
         nested_folders = _bx_folder_getchildren(
-            cloud_token,
+            token,
             cloud_parent_id,
             filter={"type": object_type},
             select=["ID", "REAL_OBJECT_ID", "PARENT_ID"]
@@ -41,7 +41,7 @@ def _recursive_descent(
         # Рекурсия для детей
         for folder in nested_folders:
             folder_id = int(folder["ID"])
-            _recursive_descent(cloud_token, object_type, folder_id, result)
+            recursive_descent(token, object_type, folder_id, result)
 
         return result
 
@@ -57,7 +57,7 @@ def ordered_hierarchy(
         cloud_parent_id: int,
 ) -> list[int]:
 
-    structure = _recursive_descent(cloud_token, object_type, cloud_parent_id)
+    structure = recursive_descent(cloud_token, object_type, cloud_parent_id)
 
     result = []
     for parent_id, children_id in structure.items():

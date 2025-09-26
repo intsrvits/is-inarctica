@@ -24,8 +24,8 @@ class Folder(models.Model):
 
 class Storage(models.Model):
     """Модель дискового хранилища"""
-    cloud_id = models.IntegerField("ID на облаке", unique=True)  # Используется поле ID
-    box_id = models.IntegerField("ID на коробке", blank=True, null=True)  # Используется поле ID
+    cloud_id = models.IntegerField("ID на облаке", unique=True)  # Используется поле REAL_OBJECT_ID
+    box_id = models.IntegerField("ID на коробке", blank=True, null=True)  # Используется поле REAL_OBJECT_ID
 
     folders_in_cloud = models.IntegerField("Папок на облаке", blank=True, null=True, default=0)
     folders_in_box = models.IntegerField("Папок на коробке", blank=True, null=True, default=0)

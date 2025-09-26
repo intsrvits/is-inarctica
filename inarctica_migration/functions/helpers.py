@@ -9,7 +9,7 @@ from functools import wraps
 from threading import Thread
 from typing import Callable, Optional, Text, Tuple
 
-USERNAMES = "@iis_itsolution, @lra710\n\n"
+USERNAMES = "@iis_itsolution\n\n"
 
 
 def debug_point(message: Text, with_tags: bool = True, exc_info: Optional[Text] = None):

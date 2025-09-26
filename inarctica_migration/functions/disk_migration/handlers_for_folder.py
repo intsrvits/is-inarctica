@@ -3,7 +3,7 @@ from inarctica_migration.utils import CloudBitrixToken, BoxBitrixToken
 
 from inarctica_migration.functions.helpers import debug_point
 from inarctica_migration.functions.disk_migration.bx_rest_requests import _bx_folder_addsubfolder
-from inarctica_migration.functions.disk_migration.descent_by_recursion import ordered_hierarchy
+from inarctica_migration.functions.disk_migration.descent_by_recursion import ordered_hierarchy, recursive_descent
 
 
 def _synchronize_folders_for_storage(
@@ -78,7 +78,7 @@ def _synchronize_folders_for_storage(
             )
 
     except Exception as exc:
-        debug_point(f"Произошла ошибка в _synchronize_folders_for_storage (при синхронизации) : {exc}")
+        debug_point(f"Произошла ошибка в при синхронизации папок в хранилище с boxRealObjID {storage.box_id:<5} : {exc}", with_tags=True)
         raise
 
     finally:
@@ -103,5 +103,44 @@ def _synchronize_folders_for_storage(
 
         storage.save()
 
-        print(f"Создано новых {len(bulk_data)} папок. Всего папок на в этом хранилище: {storage.folders_in_cloud}")
+        debug_point(f"Создание папок. Хранилище с boxRealObjID {storage.box_id:<5} | Cоздано новых: {len(bulk_data):<3} | Сейчас на коробке: {storage.folders_in_box + len(bulk_data):<3} | Всего на облаке {storage.folders_in_cloud:<3}", with_tags=False)
         return
+
+
+def delete_folders_for_storage(
+        box_token: BoxBitrixToken,
+        box_storage_id: int,
+):
+    """"""
+    group_folders_cnt = 0
+    taking_methods = []
+    deleting_methods = []
+
+    folders_hierarchy_map: dict[int, list[int]] = recursive_descent(box_token, 'folder', box_storage_id)
+    folder_ids_to_delete: list[int] = list(folders_hierarchy_map.values())[0]
+
+    try:
+        for folder_id in folder_ids_to_delete:
+            taking_methods.append((str(folder_id), "disk.folder.get", {'id': folder_id}))
+
+        selected_folders = box_token.batch_api_call(taking_methods)
+
+        for folder_id, folder_attributes in selected_folders.successes.items():
+            box_id = folder_attributes["result"]["ID"]
+            box_real_obj_id = selected_folders.successes[folder_id]['result']['REAL_OBJECT_ID']
+
+            # Ловим случаи когда у нас подключен диск проекта (Их нельзя удалить) и пропускаем их
+            if box_id != box_real_obj_id:
+                group_folders_cnt += 1
+                continue
+
+            deleting_methods.append((str(folder_id), "disk.folder.deletetree", {'id': box_real_obj_id}))
+
+        delete_result = box_token.batch_api_call(deleting_methods)
+
+        if len(deleting_methods) > 0 or len(folder_ids_to_delete) > 0:
+            debug_point(f"Удалено {len(deleting_methods)} ближайших к хранилищу с boxRealObjID={box_storage_id} папок. Всего было обнаружено: {len(folder_ids_to_delete)}. Групповых папок: {group_folders_cnt}", with_tags=False)
+
+    except Exception as exc:
+        debug_point(f"Произошла ошибка во время удаления папок из хранилища c boxRealObjID={box_storage_id}: {exc}", with_tags=True)
+
