@@ -5,8 +5,9 @@ from inarctica_migration.functions.helpers import debug_point
 from inarctica_migration.functions.disk_migration.bx_rest_requests import _bx_folder_getchildren
 
 
-def _folders_recursive_descent(
+def _recursive_descent(
         cloud_token: CloudBitrixToken,
+        object_type: str,  # todo сделать аннотацию и переписать докстринг
         cloud_parent_id: int,
         result: Union[dict, None] = None
 ) -> dict[int, list]:
@@ -29,7 +30,7 @@ def _folders_recursive_descent(
         nested_folders = _bx_folder_getchildren(
             cloud_token,
             cloud_parent_id,
-            filter={"type": "folder"},
+            filter={"type": object_type},
             select=["ID", "REAL_OBJECT_ID", "PARENT_ID"]
         )
 
@@ -40,17 +41,24 @@ def _folders_recursive_descent(
         # Рекурсия для детей
         for folder in nested_folders:
             folder_id = int(folder["ID"])
-            _folders_recursive_descent(cloud_token, folder_id, result)
+            _recursive_descent(cloud_token, object_type, folder_id, result)
 
         return result
 
     except Exception as exc:
 
-        debug_point(f"Ошибка в _folders_recursive_descent для корневой папки с облачным ID={cloud_parent_id}: {exc}", with_tags=True)
+        debug_point(f"Ошибка в _recursive_descent для корневой папки с облачным ID={cloud_parent_id}: {exc}", with_tags=True)
         raise
 
 
-def ordered_hierarchy(structure):
+def ordered_hierarchy(
+        cloud_token: CloudBitrixToken,
+        object_type: str,
+        cloud_parent_id: int,
+) -> list[int]:
+
+    structure = _recursive_descent(cloud_token, object_type, cloud_parent_id)
+
     result = []
     for parent_id, children_id in structure.items():
         if not parent_id in result:

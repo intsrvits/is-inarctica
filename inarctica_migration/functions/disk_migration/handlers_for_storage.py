@@ -18,7 +18,7 @@ def _synchronize_storages(
 
     bulk_data = []
 
-    storage_relation_map: dict[int, int] = dict(Storage.objects.all().values_list("origin_id", "destination_id"))
+    storage_relation_map: dict[int, int] = dict(Storage.objects.all().values_list("cloud_id", "box_id"))
 
     try:
         current_cloud_storages = _bx_storage_getlist(cloud_token)
@@ -36,8 +36,8 @@ def _synchronize_storages(
                     if cloud_storage["NAME"] == box_storage["NAME"]:
                         bulk_data.append(
                             Storage(
-                                origin_id=cloud_storage_obj_id,
-                                destination_id=box_storage_obj_id,
+                                cloud_id=cloud_storage_obj_id,
+                                box_id=box_storage_obj_id,
                             )
                         )
 
@@ -49,17 +49,18 @@ def _synchronize_storages(
 
     finally:
         unique_bulk_data = {
-            storage.origin_id: storage
+            storage.cloud_id: storage
             for storage in bulk_data
         }.values()
 
         Storage.objects.bulk_create(
             unique_bulk_data,
             batch_size=1000,
-            unique_fields=["origin_id"],
-            update_fields=["destination_id"],
+            unique_fields=["cloud_id"],
+            update_fields=["box_id"],
             update_conflicts=True,
         )
 
-        debug_point(f"Обработано (создано) {len(unique_bulk_data)} связей между хранилищами. Всего связей {len(storage_relation_map)}", with_tags=False)
+        print(f"Создано {len(unique_bulk_data)} связей между хранилищами. Всего связей {len(storage_relation_map)}")
+        debug_point(f"Создано {len(unique_bulk_data)} связей между хранилищами. Всего связей {len(storage_relation_map)}", with_tags=False)
         return storage_relation_map
