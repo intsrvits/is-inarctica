@@ -115,38 +115,67 @@ def _synchronize_folders_for_storage(
 
 def delete_folders_for_storage(
         box_token: BoxBitrixToken,
-        box_storage_id: int,
+        folder_ids_map: dict[int, int],
 ):
-    """"""
-    group_folders_cnt = 0
-    taking_methods = []
-    deleting_methods = []
+    """
+    Функция отчищает всё root-папку (хранилище) от всех её дочерних, кроме дочерних в виде ссылок на диск группы.
 
-    folders_hierarchy_map: dict[int, list[int]] = recursive_descent(box_token, 'folder', box_storage_id)
-    folder_ids_to_delete: list[int] = list(folders_hierarchy_map.values())[0]
+    :param box_token: Токен портала на котором работаем.
+    :param folder_ids_map: REAL_OBJECT_IDs папок, которые нужно зачистить.
+    """
+    storage_applicant_id = ""
+    taking_methods = []
+
+    # Собираем методы для батч-запроса на взятие всех ближайших детей для root-папок (хранилищ)
+    for folder_id in folder_ids_map.keys():
+        taking_methods.append((str(folder_id), "disk.folder.getchildren", {"id": folder_id}))
 
     try:
-        for folder_id in folder_ids_to_delete:
-            taking_methods.append((str(folder_id), "disk.folder.get", {'id': folder_id}))
+        applicants_for_removal = box_token.batch_api_call(taking_methods)
+        if applicants_for_removal.errors:
+            debug_point("Удаление папок delete_folders_for_storage\n"
+                        "❌ Произошла ошибка во время батч-запроса\n"
+                        f"{applicants_for_removal.errors}",
+                        )
+            raise
 
-        selected_folders = box_token.batch_api_call(taking_methods)
+        # Для каждого хранилища и его ближайших детей выполняем рекурсивное очищение
+        for storage_applicant_id, applicant_data in applicants_for_removal.successes.items():
+            group_trees_cnt, deleted_trees_cnt = 0, 0
+            all_subfolders = applicant_data["result"]
 
-        for folder_id, folder_attributes in selected_folders.successes.items():
-            box_id = folder_attributes["result"]["ID"]
-            box_real_obj_id = selected_folders.successes[folder_id]['result']['REAL_OBJECT_ID']
+            # Если хранилище имеет вложенные папки
+            if all_subfolders:
+                for folder in all_subfolders:
+                    folder_applicant_id = folder["ID"]
+                    applicant_object_id = folder["REAL_OBJECT_ID"]
 
-            # Ловим случаи когда у нас подключен диск проекта (Их нельзя удалить) и пропускаем их
-            if box_id != box_real_obj_id:
-                group_folders_cnt += 1
-                continue
+                    # Пропускаем тех, которые являются ссылками на диски групп и проектов
+                    if folder_applicant_id != applicant_object_id:
+                        group_trees_cnt += 1
+                        continue
 
-            deleting_methods.append((str(folder_id), "disk.folder.deletetree", {'id': box_real_obj_id}))
-
-        delete_result = box_token.batch_api_call(deleting_methods)
-
-        if len(deleting_methods) > 0 or len(folder_ids_to_delete) > 0:
-            debug_point(f"Удалено {len(deleting_methods)} ближайших к хранилищу с boxRealObjID={box_storage_id} папок. Всего было обнаружено: {len(folder_ids_to_delete)}. Групповых папок: {group_folders_cnt}", with_tags=False)
+                    box_token.call_api_method("disk.folder.deletetree", {"id": folder_applicant_id})
+                    deleted_trees_cnt += 1
+            
+            if len(all_subfolders) - deleted_trees_cnt != 0:
+                debug_point("Удаление папок delete_folders_for_storage\n"
+                            f"Удалено {deleted_trees_cnt}\n\n"
+                            "⚠️ Удалены не все папки \n"
+                            f"Удалено | Всего | Групповых папок\n"
+                            f"{deleted_trees_cnt:<15} | {len(all_subfolders):<8} | {group_trees_cnt:<17}\n\n"
+                            f"boxID={storage_applicant_id}\n"
+                            f"https://bitrix24.inarctica.com/bitrix/tools/disk/focus.php?folderId={storage_applicant_id}&action=openFolderList&ncc=1\n\n"
+                            f"cloudID={folder_ids_map[int(storage_applicant_id)]}\n"
+                            f"https://inarctica.bitrix24.ru/bitrix/tools/disk/focus.php?folderId={folder_ids_map[int(storage_applicant_id)]}&action=openFolderList&ncc=1\n\n"
+                            )
 
     except Exception as exc:
-        debug_point(f"Произошла ошибка во время удаления папок из хранилища c boxRealObjID={box_storage_id}: {exc}", with_tags=True)
-
+        debug_point("Удаление папок delete_folders_for_storage\n"
+                    "❌ Произошла ошибка во время обработки коробочного хранилища\n"
+                    f"boxID={storage_applicant_id}\n"
+                    f"https://bitrix24.inarctica.com/bitrix/tools/disk/focus.php?folderId={storage_applicant_id}&action=openFolderList&ncc=1\n\n"
+                    f"cloudID={folder_ids_map[int(storage_applicant_id)]}\n"
+                    f"https://inarctica.bitrix24.ru/bitrix/tools/disk/focus.php?folderId={folder_ids_map[int(storage_applicant_id)]}&action=openFolderList&ncc=1\n\n"
+                    f"{exc}"
+                    )

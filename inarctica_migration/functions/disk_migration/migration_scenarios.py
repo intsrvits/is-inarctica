@@ -15,16 +15,15 @@ def clear_all_storages():
     cloud_token = CloudBitrixToken()
     box_token = BoxBitrixToken()
 
-
-
     # Настройка связей между хранилищами
-    # {origin_id: destination_id, ...}
+    # {cloud_id: box_id, ...}
     storage_relation_map: dict[int, int] = _synchronize_storages(cloud_token=cloud_token, box_token=box_token)
 
-    # Удаление всех папок хранилища папок
-    for storage_relation in storage_relation_map:
+    # Меняем ключи и значения местами. Получается связь box_id - cloud_id
+    inv_storage_relation_map: dict[int, int] = {value: key for key, value in storage_relation_map.items()}
 
-        delete_folders_for_storage(box_token, storage_relation_map[storage_relation])
+    # Чистка каждой из root-папки (хранилища) среди найденных и сопоставленных
+    delete_folders_for_storage(box_token, inv_storage_relation_map)
 
 
 def migrate_disk():
