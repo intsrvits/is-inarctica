@@ -12,13 +12,13 @@ def recursive_descent(
         result: Union[dict, None] = None
 ) -> dict[int, list]:
     """
-    Рекурсивно получает структуру, где ключи это (все дочерние папки для cloud_parent_id и сама эта папка с cloud_parent_id),
-    а значения это список всех дочерних папок для каждой из папок. Если папка не содержит в себе дочерней, то её список пуст []
+    Рекурсивно получает структуру, где ключи это все папки хранилища, а значения - это список id их ближайших детей.
+    Если папка не содержит в себе дочерней, то её список пуст []
 
     {
     cloud_parent_id: [child_id1, child_id2, ...],
-    parent1_id: [],
-    parent2_id: [],
+    child_id1: [child_id11, child_id12],
+    child_id2: [],
     }
     """
 
@@ -56,9 +56,12 @@ def ordered_hierarchy(
         object_type: str,
         cloud_parent_id: int,
 ) -> list[int]:
+    """
+    Превращает структуру в последовательный список ID.
 
-    structure = recursive_descent(cloud_token, object_type, cloud_parent_id)
-
+    :param structure: древовидная структура с указанием узла и его детей
+    :return: list[int]
+    """
     result = []
     for parent_id, children_id in structure.items():
         if not parent_id in result:
