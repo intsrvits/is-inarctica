@@ -1,7 +1,6 @@
-from typing import Union
-
 from inarctica_migration.functions.disk_migration.handlers_for_folder import _synchronize_folders_for_storage, delete_folders_for_storage
 from inarctica_migration.functions.disk_migration.handlers_for_storage import synchronize_storages
+from inarctica_migration.functions.helpers import debug_point
 from inarctica_migration.utils import CloudBitrixToken, BoxBitrixToken
 
 
@@ -11,13 +10,27 @@ def clear_all_storages():
 
     !!! Перед запуском migrate_disk стоит почистить БД, т.к удаление происходит только на Битриксе !!!
     """
+    storage_relation_map: dict[int, int] = {}
 
     cloud_token = CloudBitrixToken()
     box_token = BoxBitrixToken()
 
-    # Настройка связей между хранилищами
-    # {cloud_id: box_id, ...}
-    storage_relation_map: dict[int, int] = synchronize_storages(cloud_token=cloud_token, box_token=box_token, entity_type='group')
+    entity_types = [
+        "group",
+        "common",
+        "user",
+    ]
+
+    # Настройка связей между хранилищами определённых типов
+    for entity_type in entity_types:
+
+        # Настройка связей между хранилищами
+        # {cloud_id: box_id, ...}
+        storage_relation_map: dict[int, int] = synchronize_storages(
+            cloud_token=cloud_token,
+            box_token=box_token,
+            entity_type=entity_type
+        )
 
     # Меняем ключи и значения местами. Получается связь box_id - cloud_id
     inv_storage_relation_map: dict[int, int] = {value: key for key, value in storage_relation_map.items()}
