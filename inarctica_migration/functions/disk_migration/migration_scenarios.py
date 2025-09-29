@@ -50,14 +50,26 @@ def migrate_disk():
     cloud_token = CloudBitrixToken()
     box_token = BoxBitrixToken()
 
-    # Настройка связей между хранилищами
-    # {origin_id: destination_id, ...}
-    storage_relation_map, storage_not_sync_folders = _synchronize_storages(cloud_token=cloud_token, box_token=box_token)
+    entity_types = [
+        "group",
+        "common",
+        "user",
+    ]
 
-    # Воссоздание структуры папок для КАЖДОГО из хранилищ
-    for storage_relation in storage_not_sync_folders:
-        if storage_relation in [19, 67]:
-        #todo убрать хардкод (пока тестим на своих дисках)
+    # Миграция всех перечисленных типов хранилищ
+    for entity_type in entity_types:
+        debug_point(f"Миграция хранилищ с ENTITY_TYPE={entity_type} ")
+
+        # Настройка связей между хранилищами
+        # {origin_id: destination_id, ...}
+        entity_storage_relation_map = synchronize_storages(
+            cloud_token=cloud_token,
+            box_token=box_token,
+            entity_type=entity_type
+        )
+
+        # Воссоздание структуры папок для каждого из групповых хранилищ
+        for storage_relation in entity_storage_relation_map:
             _synchronize_folders_for_storage(
                 cloud_token=cloud_token,
                 box_token=box_token,
