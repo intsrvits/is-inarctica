@@ -6,16 +6,17 @@ from inarctica_migration.functions.helpers import debug_point
 from inarctica_migration.functions.disk_migration.bx_rest_requests import _bx_storage_getlist
 
 
-def _synchronize_storages(
+def synchronize_storages(
         cloud_token: CloudBitrixToken,
-        box_token: BoxBitrixToken
+        box_token: BoxBitrixToken,
+        entity_type: str = None,
 ) -> dict:
     """
     Функция ищет и записывает в БД связи между одинаковыми по названию хранилищами, entity_type и entity_id
 
     После завершения работы в бд появляются записи об одинаковых хранилищах: origin_id, destination_id
     """
-    cloud_storage_obj_id, box_storage_obj_id = None, None
+    cloud_storage_id, box_storage_id = None, None
 
     bulk_data = []
 
@@ -32,43 +33,56 @@ def _synchronize_storages(
             for box_storage in current_box_storages:
 
                 # Составляем пространство условий на идентичность хранилищ
+                # 1. Одинаковое название
                 same_name_condition: bool = cloud_storage["NAME"] == box_storage["NAME"]
-                same_entity_type_condition: bool = cloud_storage['ENTITY_TYPE'] == box_storage['ENTITY_TYPE']
+
+                # 2. Одинаковый тип
+                if entity_type:
+                    same_entity_type_condition: bool = cloud_storage['ENTITY_TYPE'] == box_storage['ENTITY_TYPE'] == entity_type
+
+                else:
+                    same_entity_type_condition: bool = cloud_storage['ENTITY_TYPE'] == box_storage['ENTITY_TYPE']
+                    entity_type = cloud_storage['ENTITY_TYPE']
 
                 if not all([same_name_condition, same_entity_type_condition]):
                     continue
 
-                same_entity_condition: bool = False
-
-                if cloud_storage['ENTITY_TYPE'] == 'user':
-                    same_entity_condition = users_cloud_box_map.get(int(cloud_storage['ENTITY_ID'])) == int(box_storage['ENTITY_ID'])
-                    #same_entity_condition = False #todo хардкод
-                elif cloud_storage['ENTITY_TYPE'] == 'group':
-                    same_entity_condition = groups_cloud_box_map.get(int(cloud_storage['ENTITY_ID'])) == int(box_storage['ENTITY_ID'])
-                elif cloud_storage['ENTITY_TYPE'] == 'common':
-                    same_entity_condition = True
+                # 3. Идентичные ENTITY_ID
+                entity_checkers = {
+                    "user": lambda c, b: users_cloud_box_map.get(int(c["ENTITY_ID"])) == int(b["ENTITY_ID"]),
+                    "group": lambda c, b: groups_cloud_box_map.get(int(c["ENTITY_ID"])) == int(b["ENTITY_ID"]),
+                    "common": lambda c, b: True,
+                }
+                same_entity_condition = entity_checkers.get(entity_type, lambda *_: False)(cloud_storage, box_storage)
 
                 if not same_entity_condition:
                     continue
 
-                cloud_storage_obj_id = int(cloud_storage["ROOT_OBJECT_ID"])
+                cloud_storage_id = int(cloud_storage["ROOT_OBJECT_ID"])
+
                 # Работаем только с несуществующими связями
-                if storage_relation_map.get(cloud_storage_obj_id) is None:
-
-
-                    box_storage_obj_id = int(box_storage["ROOT_OBJECT_ID"])
+                if storage_relation_map.get(cloud_storage_id) is None:
+                    box_storage_id = int(box_storage["ROOT_OBJECT_ID"])
 
                     bulk_data.append(
                         Storage(
-                            cloud_id=cloud_storage_obj_id,
-                            box_id=box_storage_obj_id,
+                            cloud_id=cloud_storage_id,
+                            box_id=box_storage_id,
+                            entity_type=entity_type,
                         )
                     )
 
-                    storage_relation_map[cloud_storage_obj_id] = box_storage_obj_id
+                    storage_relation_map[cloud_storage_id] = box_storage_id
 
     except Exception as exc:
-        debug_point(f"Произошла ошибка во время синхронизации облачного хранилища с ID {cloud_storage_obj_id} и коробочного с ID {box_storage_obj_id}: {exc}", with_tags=True)
+        debug_point(
+            "❌ Произошла ошибка при cихнронизации хранилища synchronize_storages\n"
+            f"boxID={box_storage_id}\n"
+            f"https://bitrix24.inarctica.com/bitrix/tools/disk/focus.php?folderId={box_storage_id}&action=openFolderList&ncc=1\n\n"
+            f"cloudID={cloud_storage_id}\n"
+            f"https://inarctica.bitrix24.ru/bitrix/tools/disk/focus.php?folderId={cloud_storage_id}&action=openFolderList&ncc=1\n\n"
+            f"{exc}",
+        )
         raise
 
     finally:
@@ -85,10 +99,6 @@ def _synchronize_storages(
             update_conflicts=True,
         )
 
-        print(f"Создано {len(unique_bulk_data)} связей между хранилищами. Всего связей {len(storage_relation_map)}")
         debug_point(f"Создано {len(unique_bulk_data)} связей между хранилищами. Всего связей {len(storage_relation_map)}", with_tags=False)
 
-        # возвращаем только те которые не синхронизированы
-        storage_not_sync_folders = dict(Storage.objects.filter(folders_sync=False).values_list("cloud_id", "box_id"))
-
-        return storage_relation_map, storage_not_sync_folders
+        return storage_relation_map

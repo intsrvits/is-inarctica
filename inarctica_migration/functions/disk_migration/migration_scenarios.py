@@ -1,7 +1,7 @@
 from typing import Union
 
 from inarctica_migration.functions.disk_migration.handlers_for_folder import _synchronize_folders_for_storage, delete_folders_for_storage
-from inarctica_migration.functions.disk_migration.handlers_for_storage import _synchronize_storages
+from inarctica_migration.functions.disk_migration.handlers_for_storage import synchronize_storages
 from inarctica_migration.utils import CloudBitrixToken, BoxBitrixToken
 
 
@@ -17,7 +17,7 @@ def clear_all_storages():
 
     # Настройка связей между хранилищами
     # {cloud_id: box_id, ...}
-    storage_relation_map: dict[int, int] = _synchronize_storages(cloud_token=cloud_token, box_token=box_token)
+    storage_relation_map: dict[int, int] = synchronize_storages(cloud_token=cloud_token, box_token=box_token, entity_type='group')
 
     # Меняем ключи и значения местами. Получается связь box_id - cloud_id
     inv_storage_relation_map: dict[int, int] = {value: key for key, value in storage_relation_map.items()}
