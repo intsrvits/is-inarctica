@@ -47,14 +47,12 @@ def recursive_descent(
 
     except Exception as exc:
 
-        debug_point(f"Ошибка в _recursive_descent для корневой папки с облачным ID={cloud_parent_id}: {exc}", with_tags=True)
+        debug_point(f"Ошибка в _recursive_descent для корневой папки с облачным ID={cloud_parent_id}: {exc}")
         raise
 
 
 def ordered_hierarchy(
-        cloud_token: CloudBitrixToken,
-        object_type: str,
-        cloud_parent_id: int,
+        structure: dict[int, list],
 ) -> list[int]:
     """
     Превращает структуру в последовательный список ID.
@@ -64,11 +62,11 @@ def ordered_hierarchy(
     """
     result = []
     for parent_id, children_id in structure.items():
-        if not parent_id in result:
+        if parent_id not in result:
             result.append(parent_id)
 
         for child_id in children_id:
-            if not child_id in result:
+            if child_id not in result:
                 result.append(child_id)
 
     return result
