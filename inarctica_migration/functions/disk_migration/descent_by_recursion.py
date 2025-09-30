@@ -35,12 +35,12 @@ def recursive_descent(
         )
 
         # Добавляем прямых детей
-        child_ids = [int(folder["REAL_OBJECT_ID"]) for folder in nested_folders]
+        child_ids = [int(folder["ID"]) for folder in nested_folders]
         result[cloud_parent_id] = child_ids
 
         # Рекурсия для детей
         for folder in nested_folders:
-            folder_id = int(folder["REAL_OBJECT_ID"])
+            folder_id = int(folder["ID"])
             recursive_descent(token, object_type, folder_id, result)
 
         return result

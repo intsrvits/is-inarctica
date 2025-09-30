@@ -9,7 +9,7 @@ from inarctica_migration.functions.disk_migration.bx_rest_requests import _bx_st
 def synchronize_storages(
         cloud_token: CloudBitrixToken,
         box_token: BoxBitrixToken,
-        entity_type: str = None,
+        entity_type: list[str] = None,
 ) -> dict:
     """
     Функция ищет и записывает в БД связи между одинаковыми по названию хранилищами, entity_type и entity_id
@@ -20,7 +20,11 @@ def synchronize_storages(
 
     bulk_data = []
 
-    storage_relation_map: dict[int, int] = dict(Storage.objects.all().values_list("cloud_id", "box_id"))
+    if entity_type:
+        storage_relation_map: dict[int, int] = dict(Storage.objects.filter(entity_type__in=entity_type).values_list("cloud_id", "box_id"))
+    else:
+        storage_relation_map: dict[int, int] = dict(Storage.objects.all().values_list("cloud_id", "box_id"))
+
     users_cloud_box_map: dict[int, int] = dict(User.objects.all().values_list("origin_id", "destination_id"))
     groups_cloud_box_map: dict[int, int] = dict(Group.objects.all().values_list("origin_id", "destination_id"))
 

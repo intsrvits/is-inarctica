@@ -74,45 +74,51 @@ def _synchronize_folders_for_storage(
             if folder_id in folders_to_skip:
                 continue
 
-            group_folders_cnt = 0
-
             # 7. Проверки неприятных случаев
             # 7.1 Папка уже перенесена и её связи записаны в бд
-            if int(folder_attributes["result"]["REAL_OBJECT_ID"]) in merged_relation_map:
-                origin_folder_id_list.remove(int(folder_id))
+            if int(folder_attributes["result"]["ID"]) in merged_relation_map:
+                folders_to_skip = [*folders_to_skip, int(folder_id), *storage_tree_structure[int(folder_id)]]
+
+                origin_folder_id_list = [
+                    f_id for f_id in origin_folder_id_list if f_id not in [*storage_tree_structure[int(folder_id)], int(folder_id)]
+                ]
+
                 continue
+                # try:
+                #     origin_folder_id_list.remove(int(folder_id))
+                #
+                # except:
+                #     box_parent_id = merged_relation_map[folder_attributes["result"]["REAL_OBJECT_ID"]]
+                #     name = folder_attributes["result"]["NAME"]
+                #     params = {"id": box_parent_id, "data": {"NAME": name}}
+                #
+                #     addsubfolder_result = _bx_folder_addsubfolder(box_token, params)
+                #     added_box_folder_id = int(addsubfolder_result["result"]["REAL_OBJECT_ID"])
+                #
+                #     merged_relation_map[int(folder_attributes["result"]["ID"])] = added_box_folder_id
+                #     bulk_data.append(
+                #         Folder(
+                #             cloud_id=folder_attributes["result"]["ID"],
+                #             box_id=added_box_folder_id,
+                #             parent_cloud_id=folder_attributes["result"]["PARENT_ID"],
+                #             parent_box_id=box_parent_id,
+                #         )
+                #     )
 
             # 7.2 Папка не является диском группы
             elif folder_attributes["result"]["ID"] != folder_attributes["result"]["REAL_OBJECT_ID"]:
                 # 7.2.1 Добавляем диск группы в папку и забываем про него и его дочерние папки
                 # todo Групповый диск можно вложить в обычную папку - если так кто-то сделал нужно переписать логику
 
-                # Проверка на существование пары для этой папки (кейс с уволенными сотрудниками и их групповыми дисками)
-                if merged_relation_map.get(folder_attributes["result"]["REAL_OBJECT_ID"]):
-                    pass
-                else:
-                    folders_to_skip = [*folders_to_skip, *storage_tree_structure[int(folder_id)]]
-                    origin_folder_id_list = [
-                        f_id for f_id in origin_folder_id_list if f_id not in [*storage_tree_structure, int(folder_id)]
-                    ]
-                    continue
-
-                box_parent_id = merged_relation_map[cloud_storage_id]
-                name = folder_attributes["result"]["NAME"]
-                params = {"id": box_parent_id, "data": {"NAME": name}}
-
-                addsubfolder_result = _bx_folder_addsubfolder(box_token, params)
                 folders_to_skip = [*folders_to_skip, *storage_tree_structure[int(folder_id)]]
 
                 origin_folder_id_list = [
-                    f_id for f_id in origin_folder_id_list if f_id not in [*storage_tree_structure, int(folder_id)]
+                    f_id for f_id in origin_folder_id_list if f_id not in [*storage_tree_structure[int(folder_id)], int(folder_id)]
                 ]
 
                 # 7.2.2 Подготавливаем статистику к выводу
-                group_folders_cnt = 1 + len(storage_tree_structure[int(folder_id)])
+                group_folders_cnt += 1 + len(storage_tree_structure[int(folder_id)])
                 continue
-
-            # cloud_real_object_id = folder_attributes["result"]["REAL_OBJECT_ID"
 
             # 7.3 Поведение при всех вложенных папок
             else:
@@ -143,7 +149,7 @@ def _synchronize_folders_for_storage(
                     box_id=added_box_folder_id,
                     parent_cloud_id=cloud_parent_id,
                     parent_box_id=box_parent_id,
-                    )
+                )
             )
 
     except Exception as exc:
