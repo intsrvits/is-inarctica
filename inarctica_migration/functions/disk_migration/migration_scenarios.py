@@ -51,8 +51,8 @@ def migrate_disk():
     box_token = BoxBitrixToken()
 
     entity_types = [
-        "group",
-        "common",
+        # "group",
+        # "common",
         "user",
     ]
 
@@ -68,6 +68,15 @@ def migrate_disk():
             entity_type=entity_type
         )
 
+        if entity_type == 'user':
+            for storage_relation in [8417]:
+                _synchronize_folders_for_storage(
+                    cloud_token=cloud_token,
+                    box_token=box_token,
+                    cloud_storage_id=storage_relation,
+                )
+            break
+        break
         # Воссоздание структуры папок для каждого из групповых хранилищ
         for storage_relation in entity_storage_relation_map:
             _synchronize_folders_for_storage(
@@ -75,3 +84,5 @@ def migrate_disk():
                 box_token=box_token,
                 cloud_storage_id=storage_relation,
             )
+        debug_point(f"Синхронизация {entity_type} завершена. Обработано {len(entity_storage_relation_map)} отношений", with_tags=False)
+    debug_point("Синхронизация завершена", with_tags=False)
