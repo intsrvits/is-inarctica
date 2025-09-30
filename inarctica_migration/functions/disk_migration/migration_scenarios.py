@@ -1,6 +1,8 @@
+from inarctica_migration.functions.disk_migration.handlers_for_file import synchronize_files_for_storage
 from inarctica_migration.functions.disk_migration.handlers_for_folder import _synchronize_folders_for_storage, delete_folders_for_storage
 from inarctica_migration.functions.disk_migration.handlers_for_storage import synchronize_storages
 from inarctica_migration.functions.helpers import debug_point
+from inarctica_migration.models import Storage
 from inarctica_migration.utils import CloudBitrixToken, BoxBitrixToken
 
 
@@ -29,7 +31,6 @@ def clear_all_storages():
     storage_relation_map: dict[int, int] = synchronize_storages(
         cloud_token=cloud_token,
         box_token=box_token,
-
     )
 
     # Меняем ключи и значения местами. Получается связь box_id - cloud_id
@@ -68,14 +69,9 @@ def migrate_disk():
             entity_type=entity_type
         )
 
-        for storage_relation in entity_storage_relation_map:
-            if entity_type == 'user' and storage_relation in [8417]:
-                _synchronize_folders_for_storage(
-                    cloud_token=cloud_token,
-                    box_token=box_token,
-                    cloud_storage_id=storage_relation,
-                )
-                break
+        storage_ids = list(Storage.objects.filter(entity_type=entity_type).values_list('cloud_id', flat=True))
+
+        for storage_relation in storage_ids:
 
             _synchronize_folders_for_storage(
                 cloud_token=cloud_token,
@@ -86,3 +82,17 @@ def migrate_disk():
         debug_point(f"Синхронизация {entity_type} завершена. Обработано {len(entity_storage_relation_map)} отношений", with_tags=False)
 
     debug_point("Синхронизация завершена", with_tags=False)
+
+
+def migrate_files():
+    """"""
+    cloud_token = CloudBitrixToken()
+    box_token = BoxBitrixToken()
+
+    storages = dict(Storage.objects.filter(cloud_id=67).values_list('cloud_id', 'box_id'))
+    for storage in storages:
+        synchronize_files_for_storage(
+            cloud_token=cloud_token,
+            box_token=box_token,
+            cloud_storage_id=storage,
+        )

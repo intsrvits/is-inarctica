@@ -34,3 +34,17 @@ class Storage(models.Model):
 
     class Admin(admin.ModelAdmin):
         list_display = ("cloud_id", "box_id", "entity_type", "folders_in_cloud", "folders_in_box", "folders_sync", "files_sync")
+
+
+class File(models.Model):
+    """Модель дочерней папки (дискового хранилища считается корневой папкой)"""
+    cloud_id = models.IntegerField("ID на облаке", unique=True)
+    box_id = models.IntegerField("ID на коробке", blank=True, null=True)
+
+    parent_cloud_id = models.IntegerField("PARENT_ID на облаке", blank=True, null=True)
+    parent_box_id = models.IntegerField("PARENT_ID на коробке", blank=True, null=True)
+
+    created_dt = models.DateTimeField("Время создания", auto_now_add=True)
+
+    class Admin(admin.ModelAdmin):
+        list_display = ("cloud_id", "parent_cloud_id", "box_id", "parent_box_id", "created_dt")
