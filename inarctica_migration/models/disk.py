@@ -45,6 +45,7 @@ class File(models.Model):
     parent_box_id = models.IntegerField("PARENT_ID на коробке", blank=True, null=True)
 
     created_dt = models.DateTimeField("Время создания", auto_now_add=True)
+    size = models.PositiveBigIntegerField("Размер в битах", blank=True, null=True)
 
     class Admin(admin.ModelAdmin):
         list_display = ("cloud_id", "parent_cloud_id", "box_id", "parent_box_id", "created_dt")
