@@ -65,3 +65,14 @@ def retry_decorator(attempts: int, exceptions: Tuple = (Exception,), delay: int 
 def get_admin_token() -> BitrixUserToken:
     """ Получение токена по авторизации с нужными скоупами """
     return BitrixUserToken.objects.filter(user__is_admin=True, user__user_is_active=True).last()
+
+
+def execution_time_counter(func):
+    def wrapper(*args, **kwargs):
+        now = time.perf_counter()
+        result = func(*args, **kwargs)
+        delta = time.perf_counter() - now
+        print(f"Функция {func.__name__} выполнилась за : {delta}с")
+        return result
+
+    return wrapper
