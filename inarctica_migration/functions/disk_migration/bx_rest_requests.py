@@ -11,7 +11,7 @@ def _bx_storage_getlist(token: CloudBitrixToken | BoxBitrixToken) -> Union[list,
     return token.call_list_method("disk.storage.getlist", timeout=100)
 
 
-@retry_decorator(attempts=3, delay=500)
+@retry_decorator(attempts=3, delay=30)
 def _bx_folder_getchildren(
         token: CloudBitrixToken | BoxBitrixToken,
         parent_id: int,
@@ -19,7 +19,7 @@ def _bx_folder_getchildren(
         select: list = None,
 ) -> Union[list, dict]:
     """Запрос disk.folder.getchildren к REST API"""
-    return token.call_list_method("disk.folder.getchildren", {"id": parent_id, "filter": filter, "select": select}, timeout=100)
+    return token.call_list_method("disk.folder.getchildren", {"id": parent_id, "filter": filter, "select": select})
 
 
 @retry_decorator(attempts=3, delay=30)
@@ -31,10 +31,10 @@ def _bx_folder_addsubfolder(
     return token.call_api_method("disk.folder.addsubfolder", params)
 
 
-@retry_decorator(attempts=3, delay=500)
+@retry_decorator(attempts=3, delay=30)
 def _bx_folder_uploadfile(
         token: BoxBitrixToken,
         params: dict,
 ) -> dict:
     """"""
-    return token.call_api_method("disk.folder.uploadFile", params)
+    return token.call_api_method("disk.folder.uploadFile", params, timeout=300)

@@ -55,8 +55,9 @@ def file_recursive_descent(
         token: Union[CloudBitrixToken, BoxBitrixToken],
         object_type: str,
         cloud_parent_id: int,
-        result: Union[dict, None] = None
-) -> dict[int, list]:
+        result: Union[dict, None] = None,
+) -> dict[int, list] and int:
+
     # Если дошли до конца, т.е у папки нет дочерних папок
     if result is None:
         result = {}
@@ -65,7 +66,7 @@ def file_recursive_descent(
         nested_entity = _bx_folder_getchildren(
             token,
             cloud_parent_id,
-            select=["ID", "NAME", "REAL_OBJECT_ID", "PARENT_ID", "DOWNLOAD_URL"]
+            select=["ID", "NAME", "REAL_OBJECT_ID", "PARENT_ID", "DOWNLOAD_URL", "SIZE"]
         )
 
         nested_folders = []
@@ -79,7 +80,7 @@ def file_recursive_descent(
                 nested_folders.append(entity)
 
         # Добавляем прямых детей
-        files_tuple = ([(file['ID'], file['NAME'], file['DOWNLOAD_URL']) for file in nested_files])
+        files_tuple = ([(file['ID'], file['NAME'], file['DOWNLOAD_URL'], file['SIZE']) for file in nested_files])
         result[cloud_parent_id] = files_tuple
 
         # Рекурсия для детей
@@ -94,6 +95,53 @@ def file_recursive_descent(
         debug_point(f"Ошибка в _recursive_descent для корневой папки с облачным ID={cloud_parent_id}: {exc}")
         raise
 
+
+def max_file_size_counter(
+        token: Union[CloudBitrixToken, BoxBitrixToken],
+        object_type: str,
+        cloud_parent_id: int,
+        result: Union[dict, None] = None,
+) -> dict[int, list] and int:
+
+    # Если дошли до конца, т.е у папки нет дочерних папок
+    if result is None:
+        result = {}
+
+    try:
+        nested_entity = _bx_folder_getchildren(
+            token,
+            cloud_parent_id,
+            select=["ID", "NAME", "REAL_OBJECT_ID", "PARENT_ID", "DOWNLOAD_URL", "SIZE"]
+        )
+
+        nested_folders = []
+        nested_files = []
+
+        for entity in nested_entity:
+            if entity["TYPE"] == 'file':
+                nested_files.append(entity)
+
+            elif entity["TYPE"] == 'folder':
+                nested_folders.append(entity)
+
+        # Добавляем прямых детей
+        sizes = [int(file["SIZE"]) for file in nested_files if "SIZE" in file]
+        max_file_size = max(sizes, default=0)
+        if not max_file_size:
+            max_file_size = 0
+        result[cloud_parent_id] = max_file_size
+
+        # Рекурсия для детей
+        for folder in nested_folders:
+            folder_id = int(folder["ID"])
+            max_file_size_counter(token, object_type, folder_id, result)
+
+        return result
+
+    except Exception as exc:
+
+        debug_point(f"Ошибка в _recursive_descent для корневой папки с облачным ID={cloud_parent_id}: {exc}")
+        raise
 
 def ordered_hierarchy(
         structure: dict[int, list],

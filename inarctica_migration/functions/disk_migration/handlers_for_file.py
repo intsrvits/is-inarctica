@@ -90,7 +90,6 @@ def synchronize_files_for_storage(
                 file_byte_size = int(file[3])
 
                 # if file_byte_size > 111137542421:
-                #     # todo убрать
                 #     continue
 
                 if file_cloud_id in files_relation_map:
