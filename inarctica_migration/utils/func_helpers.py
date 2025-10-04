@@ -6,7 +6,7 @@ def timer(func):
         now = time.perf_counter()
         result = func(*args, **kwargs)
         delta = time.perf_counter() - now
-        print(f"Выполнилась функция {func.__name__}. Время выполнения функции : {delta}")
+        print(f"Р’С‹РїРѕР»РЅРёР»Р°СЃСЊ С„СѓРЅРєС†РёСЏ {func.__name__}. Р’СЂРµРјСЏ РІС‹РїРѕР»РЅРµРЅРёСЏ С„СѓРЅРєС†РёРё : {delta}")
         return result
 
     return wrapper

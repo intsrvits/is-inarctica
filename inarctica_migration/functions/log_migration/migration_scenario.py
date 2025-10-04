@@ -1,62 +1,64 @@
-from inarctica_migration.functions.helpers import debug_point
-from inarctica_migration.functions.log_migration.handlers_for_common_log import init_cloud_blogposts
-from inarctica_migration.functions.log_migration.helpers import get_files_base64, get_files_links
 from inarctica_migration.models import LogMigration, User
 from inarctica_migration.utils import CloudBitrixToken, BoxBitrixToken
-from inarctica_migration.functions.log_migration.bx_rest_requests import bx_log_blogpost_get, bx_log_blogpost_add
+
+from inarctica_migration.functions.log_migration.bx_rest_requests import bx_log_blogpost_add
+from inarctica_migration.functions.log_migration.handlers import (
+    init_blogpost_into_db,
+    get_sorted_by_time_blogposts,
+    get_files_base64,
+    get_files_links,
+)
 
 
 def common_log_migration():
     """"""
     bulk_data = []
-    
+
     cloud_token = CloudBitrixToken()
     box_token = BoxBitrixToken()
 
     existed_logs: dict[int, bool] = dict(LogMigration.objects.all().values_list("cloud_id", "is_synced"))
     migrated_users: dict[int, int] = dict(User.objects.all().values_list("origin_id", "destination_id"))
 
-    # Получаем
-    cloud_common_blogposts = bx_log_blogpost_get(cloud_token)
-    sorted_cloud_blogposts = sorted(cloud_common_blogposts, key=lambda item: int(item["ID"]))
+    # Получаем список всех облачных постов, отсортированный по дате созданию
+    sorted_cloud_blogposts = get_sorted_by_time_blogposts(cloud_token)
     sorted_cloud_blogposts_map = {int(blogpost["ID"]): blogpost for blogpost in sorted_cloud_blogposts}
 
-    # Выделяем новые посты, которые не были инициализированы ранее в БД
-    blogposts_to_init = []
-    for blogpost_id in sorted_cloud_blogposts_map:
-        if blogpost_id not in existed_logs:
-            blogposts_to_init.append(sorted_cloud_blogposts_map[blogpost_id])
-
-    # Сначала инициализируем новые посты - если они есть.
-    if blogposts_to_init:
-        new_blogposts = init_cloud_blogposts(blogposts_to_init, "UA")
-        existed_logs = {**existed_logs, **new_blogposts}
+    # Обновляем список известных постов
+    existed_logs = init_blogpost_into_db(sorted_cloud_blogposts_map, existed_logs)
 
     try:
-        for blogpost in sorted_cloud_blogposts:
-            # Если этот пост не перенесён (синхронизирован)
-            if not existed_logs[int(blogpost["ID"])]:
-                cloud_author_id = int(blogpost["AUTHOR_ID"])
-                box_author_id = migrated_users.get(cloud_author_id, 1)
+        # Обрабатываем все найденные посты
+        for cloud_blogpost_id, is_synced in existed_logs.items():
 
-                params = {
-                    "USER_ID": box_author_id,
-                    "POST_MESSAGE": blogpost["DETAIL_TEXT"],
-                    "POST_TITLE": blogpost["TITLE"],
-                    "DEST": ["UA"]
-                }
+            # Если уже синхронизовано, то пропускаем
+            if is_synced:
+                continue
 
-                if blogpost.get("FILES"):
-                    files_attributes: list[tuple[str, str]] = get_files_links(cloud_token, blogpost["FILES"])
+            current_blogpost = sorted_cloud_blogposts_map[cloud_blogpost_id]
+            cloud_author_id = current_blogpost["AUTHOR_ID"]
+            box_author_id = migrated_users.get(cloud_author_id, 1)
 
-                    params["FILES"] = get_files_base64(files_attributes)
+            params = {
+                "USER_ID": box_author_id,
+                "POST_MESSAGE": current_blogpost["DETAIL_TEXT"],
+                "POST_TITLE": current_blogpost["TITLE"],
+                "DEST": ["UA"]
+            }
+
+            # Если обнаружены прикрепленные файлы в облачном посте, то подготавливаем их к переносу
+            if current_blogpost.get("FILES"):
+                files_attributes: list[tuple[str, str]] = get_files_links(cloud_token, current_blogpost["FILES"])
+
+                params["FILES"] = get_files_base64(files_attributes)
+
             migration_result = bx_log_blogpost_add(box_token, params)
 
             bulk_data.append(
                 LogMigration(
-                    cloud_id=int(blogpost["ID"]),
+                    cloud_id=int(current_blogpost["ID"]),
                     box_id=int(migration_result["result"]),
-                    dest='UA',
+                    dest="UA",
                     is_synced=True,
                 )
             )
