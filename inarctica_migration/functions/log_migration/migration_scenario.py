@@ -119,7 +119,7 @@ def project_log_migration():
                     "USER_ID": box_author_id,
                     "POST_MESSAGE": current_blogpost["DETAIL_TEXT"],
                     "POST_TITLE": current_blogpost["TITLE"],
-                    "DEST": [f"SG{cloud_group_id}"]
+                    "DEST": [f"SG{migrated_groups[cloud_group_id]}"]
                 }
 
                 # Если обнаружены прикрепленные файлы в облачном посте, то подготавливаем их к переносу
