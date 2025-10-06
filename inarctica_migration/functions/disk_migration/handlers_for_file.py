@@ -75,25 +75,42 @@ def synchronize_files_for_storage(
     files_relation_map: dict[int, int] = dict(File.objects.all().values_list("cloud_id", "box_id"))
     folders = Folder.objects.all()
 
+    all_files = []
     for folder, files in folder_and_files.items():
         folder_id = int(folder)
         if folder_id not in merged_relation_map:
             continue
 
+        for file in files:
+            all_files.append(file)
+
         box_folder_id = merged_relation_map[folder_id]
 
-        for file in files:
+        for file in all_files:
             try:
+
+
                 file_cloud_id = int(file[0])
                 file_name = file[1]
                 file_url = file[2]
                 file_byte_size = int(file[3])
 
-                # if file_byte_size > 111137542421:
-                #     continue
-
                 if file_cloud_id in files_relation_map:
                     continue
+
+                if file_byte_size > 4137542421:
+                    debug_point("Зашёл ", file_name, file_byte_size)
+                    bulk_data.append(
+                        File(
+                            cloud_id=file_cloud_id,
+                            box_id=None,
+                            parent_cloud_id=folder_id,
+                            parent_box_id=box_folder_id,
+                            size=file_byte_size,
+                        )
+                    )
+                    continue
+
 
                 file_content = get_file_content(file_name, file_url)
                 params = {
@@ -112,6 +129,7 @@ def synchronize_files_for_storage(
                         box_id=uploaded_file_box_id,
                         parent_cloud_id=folder_id,
                         parent_box_id=box_folder_id,
+                        size=file_byte_size,
                     )
                 )
 
@@ -120,8 +138,8 @@ def synchronize_files_for_storage(
             except MemoryError:
                 debug_point(
                     "❌ Не хватает памяти на перенос файла\n"
-                    f"{locals().get('file_name'), file_byte_size}"
-                    f"cloudID={cloud_storage_id}\n cloudFileId={file_cloud_id}\n"
+                    f"{locals().get('file_name'), locals().get('file_byte_size')}"
+                    f"cloudID={cloud_storage_id}\n cloudFileId={locals().get('file_cloud_id')}\n"
                     f"boxID={box_folder_id}\n\n"
                 )
                 # можно continue, чтобы пропустить проблемный файл
@@ -130,9 +148,9 @@ def synchronize_files_for_storage(
             except Exception as exc:
                 debug_point(
                     "❌ Ошибка при переносе файла\n"
-                    f"{locals().get('file_name'), file_byte_size}"
+                    f"{locals().get('file_name'), locals().get('file_byte_size')}"
                     f"boxID={box_folder_id}\n boxFileId={locals().get('uploaded_file_box_id')}\n"
-                    f"cloudID={cloud_storage_id}\n cloudFileId={file_cloud_id}\n"
+                    f"cloudID={cloud_storage_id}\n cloudFileId={locals().get('file_cloud_id')}\n"
                     f"{exc}"
                 )
                 # пропускаем файл и идём дальше
@@ -150,7 +168,7 @@ def synchronize_files_for_storage(
             bulk_data,
             batch_size=1000,
             unique_fields=["cloud_id"],
-            update_fields=["box_id", "parent_cloud_id", "parent_box_id"],
+            update_fields=["box_id", "parent_cloud_id", "parent_box_id", "size"],
             update_conflicts=True,
         )
 
