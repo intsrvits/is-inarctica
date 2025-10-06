@@ -12,11 +12,21 @@ from inarctica_migration.functions.log_migration.bx_rest_requests import bx_disk
 #   Блок инициализации новых постов
 # ==================================
 def get_sorted_by_time_blogposts(
-        token: CloudBitrixToken | BoxBitrixToken
+        token: CloudBitrixToken | BoxBitrixToken,
+        dest=None
 ):
     # Получаем список всех существующих постов и сортируем их по дате (по айди создания)
-    # todo прокидывать параметр с dest
-    blogposts_list = bx_log_blogpost_get(token)
+    if dest:
+        params = {
+            "LOG_RIGHTS": [f"SG{dest}"]
+        }
+
+    else:
+        params = {
+            "LOG_RIGHTS": "UA"
+        }
+
+    blogposts_list = bx_log_blogpost_get(token, params)
     sorted_blogposts = sorted(blogposts_list, key=lambda item: int(item["ID"]))
 
     return sorted_blogposts
