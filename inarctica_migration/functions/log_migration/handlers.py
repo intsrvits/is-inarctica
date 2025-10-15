@@ -1,3 +1,5 @@
+import re
+
 import requests
 import pybase64
 
@@ -35,7 +37,10 @@ def get_sorted_by_time_blogposts(
 def init_blogpost_into_db(
         bitrix_sorted_blogposts: dict,
         blogposts_into_db: dict[int, bool],
+        dest: str | None = None,
 ) -> dict[int, bool]:
+    """"""
+
     blogposts_to_init = []
     for blogpost_id in bitrix_sorted_blogposts:
         if blogpost_id not in blogposts_into_db:
@@ -43,19 +48,22 @@ def init_blogpost_into_db(
 
     # Сначала инициализируем новые посты - если они есть.
     if blogposts_to_init:
-        new_blogposts = blogpost_initialization_process(blogposts_to_init, "UA")
+        new_blogposts = blogpost_initialization_process(blogposts_to_init, dest)
         blogposts_into_db = {**blogposts_into_db, **new_blogposts}
 
     return blogposts_into_db
 
+
 @execution_time_counter
 def blogpost_initialization_process(
         blogposts: list[dict],
-        dest: str
+        dest: str | None
 ):
     """"""
     bulk_data = []
     result = {}
+    if not dest:
+        dest = "UA"
 
     for blogpost in blogposts:
         cloud_id = blogpost["ID"]
@@ -111,3 +119,31 @@ def get_files_base64(files_attributes: list):
         del file_bytes, file_b64
 
     return files_base64
+
+
+# ===============================
+#   Блок отчистки текста
+# ===============================
+def _clean_text(text: str) -> str:
+    text = re.sub(r"\[/?[A-Z]+[^\]]*\]", "", text)  # убираем [P], [B], [LIST], [/P] и т.п.
+    text = re.sub(r"[*•\-]+", "", text)  # убираем маркеры списков
+    text = re.sub(r"\s+", " ", text)  # схлопываем пробелы
+    return text.strip().lower()
+
+
+def clean_detail_text(text: str) -> str:
+    """"""
+    prepared_text = re.sub(r"\s*\[DISK FILE ID=n\d+\]\s*", "", text)
+
+    if not prepared_text.replace(" ", "").replace("\n", "").replace("\r", ""):
+        return "Прикрепление файлов"
+
+    return prepared_text
+
+
+def clean_title(detail_text: str, title: str) -> str:
+    """"""
+    if clean_detail_text(detail_text) == "Прикрепление файлов" or (_clean_text(detail_text) == _clean_text(title)):
+        return ""
+
+    return title

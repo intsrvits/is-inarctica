@@ -90,9 +90,9 @@ def migrate_files():
     box_token = BoxBitrixToken()
 
     entity_types = [
-        "group",
+        # "group",
         "common",
-        "user",
+        # "user",
     ]
 
     # Миграция всех перечисленных типов хранилищ
@@ -140,7 +140,8 @@ def get_max_file_size():
 
     return result, max(result.values())
 
-def get_cnt_files(size_bigger = 100000):
+
+def get_cnt_files(size_bigger=100000):
     cloud_token = CloudBitrixToken()
     box_token = BoxBitrixToken()
 
@@ -155,4 +156,3 @@ def get_cnt_files(size_bigger = 100000):
         )
 
     return max_file_size
-
