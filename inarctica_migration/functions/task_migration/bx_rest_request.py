@@ -1,0 +1,17 @@
+from typing import Union
+
+from inarctica_migration.functions.helpers import retry_decorator
+from inarctica_migration.utils import CloudBitrixToken, BoxBitrixToken
+
+
+@retry_decorator(attempts=3, delay=30)
+def bx_tasks_task_list(
+        token: CloudBitrixToken | BoxBitrixToken,
+        params: dict = None,
+) -> Union[list, dict]:
+    """
+    Запрос tasks.task.list к REST API
+    https://apidocs.bitrix24.ru/api-reference/tasks/tasks-task-list.html
+    """
+
+    return token.call_list_method("tasks.task.list", params, timeout=100)['tasks']
