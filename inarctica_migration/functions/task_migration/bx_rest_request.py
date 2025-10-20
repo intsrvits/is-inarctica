@@ -15,3 +15,16 @@ def bx_tasks_task_list(
     """
 
     return token.call_list_method("tasks.task.list", params, timeout=100)['tasks']
+
+
+@retry_decorator(attempts=3, delay=30)
+def bx_tasks_task_add(
+        token: CloudBitrixToken | BoxBitrixToken,
+        params: dict = None,
+) -> Union[list, dict]:
+    """
+    Запрос tasks.task.list к REST API
+    https://apidocs.bitrix24.ru/api-reference/tasks/tasks-task-add.html
+    """
+
+    return token.call_list_method("tasks.task.add", params, timeout=100)['tasks']

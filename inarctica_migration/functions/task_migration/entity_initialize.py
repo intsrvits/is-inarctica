@@ -1,12 +1,12 @@
-from inarctica_migration.functions.helpers import debug_point
-from inarctica_migration.models.task import TaskMigration
 from inarctica_migration.utils import CloudBitrixToken
+from inarctica_migration.models import Group, TaskMigration
+
+from inarctica_migration.functions.helpers import debug_point
 from inarctica_migration.functions.task_migration.bx_rest_request import bx_tasks_task_list
-from inarctica_migration.models.group import Group
 
 
 def initialization_tasks_in_db():
-    """"""
+    """Инициализируем задачи в БД"""
     bulk_data = []
 
     migrated_group_ids = dict(Group.objects.all().values_list("origin_id", "destination_id"))
@@ -20,8 +20,8 @@ def initialization_tasks_in_db():
             task_still_not_init: bool = task['id'] not in qs_initialized_tasks
             task_group_migrated: bool = int(task['groupId']) in migrated_group_ids
 
-            if task_still_not_init:
-                if task_group_migrated:
+            if task_still_not_init:  # Задача не инициализирована
+                if task_group_migrated:  # Группа у задачи синхронизована
                     bulk_data.append(
                         TaskMigration(
                             cloud_id=int(task['id']),
@@ -29,7 +29,7 @@ def initialization_tasks_in_db():
                             group_is_sync=True,
                         )
                     )
-                else:  # Если группа не была перенесена
+                else:  # Группа у задачи не синхронизована
                     bulk_data.append(
                         TaskMigration(
                             cloud_id=int(task['id']),
@@ -48,6 +48,14 @@ def initialization_tasks_in_db():
         )
 
     finally:
+        # Избавляемся от дублей в bulk_data (Битрикс может отдавать две сущности с одинаковым ID)
+        unique_bulk_data = {}
+        for obj in bulk_data:
+            unique_bulk_data[obj.cloud_id] = obj
+
+        bulk_data = list(unique_bulk_data.values())
+
+        # Обновляем данные в БД
         TaskMigration.objects.bulk_create(
             bulk_data,
             batch_size=1000,
@@ -61,8 +69,7 @@ def initialization_tasks_in_db():
                 "Инициализация задач закончена.\n\n"
                 f"Всего на облачном портале: {len(all_cloud_tasks)}\n"
                 f"Перенесено сейчас: {len(bulk_data)}\n"
-                f"Всего в бд: {len(qs_initialized_tasks) + len(bulk_data)}"
+                f"Всего в бд: {TaskMigration.objects.all().count()}"
             ),
             with_tags=False
         )
-
