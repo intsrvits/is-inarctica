@@ -69,7 +69,7 @@ def common_log_migration():
             )
 
     except Exception as exc:
-        debug_point(error_log_message(exc, cloud_blogpost_cnt=len(sorted_cloud_blogposts), box_blogpost_cnt=192+len(bulk_data), migrated_now=len(bulk_data)))
+        debug_point(error_log_message(exc, cloud_blogpost_cnt=len(sorted_cloud_blogposts), box_blogpost_cnt=192 + len(bulk_data), migrated_now=len(bulk_data)))
 
     finally:
 
@@ -81,7 +81,7 @@ def common_log_migration():
             update_conflicts=True,
         )
 
-        debug_point(success_log_message(cloud_blogpost_cnt=len(sorted_cloud_blogposts), box_blogpost_cnt=192+len(bulk_data), migrated_now=len(bulk_data)))
+        debug_point(success_log_message(cloud_blogpost_cnt=len(sorted_cloud_blogposts), box_blogpost_cnt=192 + len(bulk_data), migrated_now=len(bulk_data)))
 
 
 def _migrate_blogposts_for_feed(
@@ -120,39 +120,35 @@ def _migrate_blogposts_for_feed(
 
     try:
         # Обрабатываем все найденные посты
-        for cloud_blogpost_id, is_synced in existed_logs.items():
+        for cloud_blogpost_id, current_blogpost in sorted_cloud_blogposts_map.items():
+            if not existed_logs[int(cloud_blogpost_id)]:
 
-            # Если уже синхронизовано, то пропускаем
-            if is_synced:
-                continue
+                cloud_author_id = current_blogpost["AUTHOR_ID"]
+                box_author_id = migrated_users.get(int(cloud_author_id), 1)
 
-            current_blogpost = sorted_cloud_blogposts_map[int(cloud_blogpost_id)]
-            cloud_author_id = current_blogpost["AUTHOR_ID"]
-            box_author_id = migrated_users.get(int(cloud_author_id), 1)
+                params = {
+                    "USER_ID": box_author_id,
+                    "POST_MESSAGE": clean_detail_text(current_blogpost["DETAIL_TEXT"]),
+                    "POST_TITLE": clean_title(current_blogpost["DETAIL_TEXT"], current_blogpost["TITLE"]),
+                    "DEST": [f"SG{migrated_groups[cloud_group_id]}"]
+                }
 
-            params = {
-                "USER_ID": box_author_id,
-                "POST_MESSAGE": clean_detail_text(current_blogpost["DETAIL_TEXT"]),
-                "POST_TITLE": clean_title(current_blogpost["DETAIL_TEXT"], current_blogpost["TITLE"]),
-                "DEST": [f"SG{migrated_groups[cloud_group_id]}"]
-            }
+                # Если обнаружены прикрепленные файлы в облачном посте, то подготавливаем их к переносу
+                if current_blogpost.get("FILES"):
+                    files_attributes: list[tuple[str, str]] = get_files_links(cloud_token, current_blogpost["FILES"])
 
-            # Если обнаружены прикрепленные файлы в облачном посте, то подготавливаем их к переносу
-            if current_blogpost.get("FILES"):
-                files_attributes: list[tuple[str, str]] = get_files_links(cloud_token, current_blogpost["FILES"])
+                    params["FILES"] = get_files_base64(files_attributes)
 
-                params["FILES"] = get_files_base64(files_attributes)
+                migration_result = bx_log_blogpost_add(box_token, params)
 
-            migration_result = bx_log_blogpost_add(box_token, params)
-
-            bulk_data.append(
-                LogMigration(
-                    cloud_id=int(current_blogpost["ID"]),
-                    box_id=int(migration_result["result"]),
-                    dest=dest if dest else "UA",
-                    is_synced=True,
+                bulk_data.append(
+                    LogMigration(
+                        cloud_id=int(current_blogpost["ID"]),
+                        box_id=int(migration_result["result"]),
+                        dest=dest if dest else "UA",
+                        is_synced=True,
+                    )
                 )
-            )
 
         current_group.blogposts_cnt += len(bulk_data)
         debug_point(success_log_message(cloud_blogpost_cnt=len(sorted_cloud_blogposts), box_blogpost_cnt=current_group.blogposts_cnt, migrated_now=len(bulk_data), cloud_dest=cloud_group_id, box_dest=migrated_groups[cloud_group_id]))
@@ -180,12 +176,10 @@ def migrate_blogposts_for_portals():
 
     existed_logs: dict[int, bool] = dict(LogMigration.objects.all().values_list("cloud_id", "is_synced"))
     migrated_users: dict[int, int] = dict(User.objects.all().values_list("origin_id", "destination_id"))
-    migrated_groups: dict[int, int] = dict(Group.objects.all().values_list("origin_id", "destination_id"))
+    migrated_groups: dict[int, int] = dict(Group.objects.filter(id__gt=59).values_list("origin_id", "destination_id"))
 
     # Перенос для постов в лентах групп
     for cloud_group_id in migrated_groups:
-        # a = [225, 322, 227, 229, 231, 265, 171, 267, 269, 107, 241, 243, 346, 219, 221, 350, 223]
-        # for cloud_group_id in a:
 
         existed_logs = _migrate_blogposts_for_feed(
             existed_logs=existed_logs,
@@ -210,6 +204,18 @@ def left_from_all_groups():
     return batch_result
 
 
+def join_in_all_groups():
+    methods = []
+
+    cloud_token = CloudBitrixToken()
+    all_groups = Group.objects.all()
+    for group in all_groups:
+        methods.append((str(group.origin_id), 'sonet_group.user.add', {"GROUP_ID": group.origin_id, "USER_ID": 1897}))
+
+    batch_result = cloud_token.batch_api_call(methods, timeout=30)
+    return batch_result
+
+
 def migrate_common_blogposts():
     existed_logs: dict[int, bool] = dict(LogMigration.objects.all().values_list("cloud_id", "is_synced"))
     migrated_users: dict[int, int] = dict(User.objects.all().values_list("origin_id", "destination_id"))
@@ -222,3 +228,4 @@ def migrate_common_blogposts():
     )
 
     debug_point("Миграция групповых новостных лент окончена")
+    return existed_logs

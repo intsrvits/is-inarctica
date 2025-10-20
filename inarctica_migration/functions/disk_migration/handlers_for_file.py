@@ -9,7 +9,6 @@ from inarctica_migration.functions.helpers import debug_point
 from inarctica_migration.functions.disk_migration.bx_rest_requests import _bx_folder_addsubfolder, _bx_folder_uploadfile
 from inarctica_migration.functions.disk_migration.descent_by_recursion import ordered_hierarchy, recursive_descent, file_recursive_descent
 
-
 from inarctica_migration.utils.func_helpers import timer
 
 
@@ -81,14 +80,15 @@ def synchronize_files_for_storage(
         if folder_id not in merged_relation_map:
             continue
 
-        for file in files:
-            all_files.append(file)
+        # for file in files:
+        #     all_files.append(file)
+
+        # return all_files
 
         box_folder_id = merged_relation_map[folder_id]
 
-        for file in all_files:
+        for file in files:
             try:
-
 
                 file_cloud_id = int(file[0])
                 file_name = file[1]
@@ -110,7 +110,6 @@ def synchronize_files_for_storage(
                         )
                     )
                     continue
-
 
                 file_content = get_file_content(file_name, file_url)
                 params = {
@@ -156,31 +155,31 @@ def synchronize_files_for_storage(
                 # пропускаем файл и идём дальше
                 continue
 
-        storage.files_in_box += uploaded_files_cnt
+    storage.files_in_box += uploaded_files_cnt
 
-        if storage.files_in_cloud == storage.files_in_box:
-            storage.files_sync = True
+    if storage.files_in_cloud == storage.files_in_box:
+        storage.files_sync = True
 
-        else:
-            storage.files_sync = False
+    else:
+        storage.files_sync = False
 
-        File.objects.bulk_create(
-            bulk_data,
-            batch_size=1000,
-            unique_fields=["cloud_id"],
-            update_fields=["box_id", "parent_cloud_id", "parent_box_id", "size"],
-            update_conflicts=True,
-        )
+    File.objects.bulk_create(
+        bulk_data,
+        batch_size=1000,
+        unique_fields=["cloud_id"],
+        update_fields=["box_id", "parent_cloud_id", "parent_box_id", "size"],
+        update_conflicts=True,
+    )
 
-        storage.save()
+    storage.save()
 
-        debug_point("✅ Создание файлов в хранилище synchronize_files_for_storage\n"
-                    f"Создано | Всего (box) | Всего (cloud)\n"
-                    f"{uploaded_files_cnt} | {storage.files_in_box} | {storage.files_in_cloud:<17}\n\n"
+    debug_point("✅ Создание файлов в хранилище synchronize_files_for_storage\n"
+                f"Создано | Всего (box) | Всего (cloud)\n"
+                f"{uploaded_files_cnt} | {storage.files_in_box} | {storage.files_in_cloud:<17}\n\n"
 
-                    f"boxID={box_folder_id}\n"
-                    f"https://bitrix24.inarctica.com/bitrix/tools/disk/focus.php?folderId={box_folder_id}&action=openFolderList&ncc=1\n\n"
-                    f"cloudID={cloud_storage_id}\n"
-                    f"https://inarctica.bitrix24.ru/bitrix/tools/disk/focus.php?folderId={cloud_storage_id}&action=openFolderList&ncc=1\n\n",
-                    )
-        return
+                f"boxID={box_folder_id}\n"
+                f"https://bitrix24.inarctica.com/bitrix/tools/disk/focus.php?folderId={box_folder_id}&action=openFolderList&ncc=1\n\n"
+                f"cloudID={cloud_storage_id}\n"
+                f"https://inarctica.bitrix24.ru/bitrix/tools/disk/focus.php?folderId={cloud_storage_id}&action=openFolderList&ncc=1\n\n",
+                )
+    return

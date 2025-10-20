@@ -48,6 +48,7 @@ def migrate_disk():
     2) Перенос структуры папок
     3) Перенос файлов
     """
+    storage_ids = None
 
     cloud_token = CloudBitrixToken()
     box_token = BoxBitrixToken()
@@ -70,7 +71,7 @@ def migrate_disk():
             entity_type=entity_type
         )
 
-        storage_ids = list(Storage.objects.filter(entity_type=entity_type).values_list('cloud_id', flat=True))
+        storage_ids = list(Storage.objects.filter(entity_type=entity_type, pk__gt=3574).values_list('cloud_id', flat=True))
 
         for storage_relation in storage_ids:
             _synchronize_folders_for_storage(
@@ -83,6 +84,8 @@ def migrate_disk():
 
     debug_point("Синхронизация завершена", with_tags=False)
 
+    return storage_ids
+
 
 def migrate_files():
     """"""
@@ -91,8 +94,8 @@ def migrate_files():
 
     entity_types = [
         # "group",
-        "common",
-        # "user",
+        # "common",
+        "user",
     ]
 
     # Миграция всех перечисленных типов хранилищ
@@ -107,7 +110,8 @@ def migrate_files():
             entity_type=entity_type
         )
 
-        storage_ids = list(Storage.objects.filter(entity_type=entity_type).values_list('cloud_id', flat=True))
+        storage_ids = list(Storage.objects.filter(entity_type=entity_type, pk__gt=3574, files_sync=False).values_list('cloud_id', flat=True))
+        # storage_ids = list(Storage.objects.filter(entity_type=entity_type, cloud_id=3965, files_sync=False).values_list('cloud_id', flat=True))
 
         for storage_relation in storage_ids:
             synchronize_files_for_storage(

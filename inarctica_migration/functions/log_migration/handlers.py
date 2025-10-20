@@ -6,6 +6,7 @@ import pybase64
 from inarctica_migration.models import LogMigration
 from inarctica_migration.utils import CloudBitrixToken, BoxBitrixToken
 
+from inarctica_migration.models import User
 from inarctica_migration.functions.helpers import execution_time_counter
 from inarctica_migration.functions.log_migration.bx_rest_requests import bx_disk_attachedObject_get, bx_log_blogpost_get
 
@@ -131,9 +132,22 @@ def _clean_text(text: str) -> str:
     return text.strip().lower()
 
 
+def _replace_user_id(match):
+    cloud_id = int(match.group(1))  # вытащили число из [USER=123]
+
+    user = User.objects.filter(origin_id=cloud_id).first()
+    if user:
+        box_id = user.destination_id
+    else:
+        box_id = 1
+
+    return f"[USER={box_id}]"
+
+
 def clean_detail_text(text: str) -> str:
     """"""
-    prepared_text = re.sub(r"\s*\[DISK FILE ID=n\d+\]\s*", "", text)
+    text_without_tags = re.sub(r"\s*\[DISK FILE ID=n\d+\]\s*", "", text)
+    prepared_text = re.sub(r'\[USER=(\d+)\]', _replace_user_id, text_without_tags)
 
     if not prepared_text.replace(" ", "").replace("\n", "").replace("\r", ""):
         return "Прикрепление файлов"
