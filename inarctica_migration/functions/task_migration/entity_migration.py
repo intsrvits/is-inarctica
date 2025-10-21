@@ -3,7 +3,7 @@ from inarctica_migration.models import Group, TaskMigration, User
 
 from inarctica_migration.functions.helpers import debug_point
 from inarctica_migration.functions.task_migration.entity_matchers import match_users
-from inarctica_migration.functions.task_migration.bx_rest_request import bx_tasks_task_list, bx_tasks_task_add
+from inarctica_migration.functions.task_migration.bx_rest_request import bx_tasks_task_list
 from inarctica_migration.functions.task_migration.fields import (task_fields_map,
                                                                  task_user_fields_map,
                                                                  task_fields_in_upper,
@@ -40,7 +40,10 @@ def migration_tasks_to_box():
     box_token = BoxBitrixToken()
 
     migrated_group_ids = dict(Group.objects.all().values_list("origin_id", "destination_id"))
-    qs_synced_tasks = (TaskMigration.objects.filter(is_synced=True).values_list("cloud_id", flat=True))
+    qs_tasks = TaskMigration.objects.filter(is_synced=True).values_list("cloud_id", "box_id", "is_synced")
+
+    synced_task_ids = [cloud_id for cloud_id, box_id, is_synced in qs_tasks if is_synced]
+    tasks_cloud_box_id_map = {cloud_id: box_id for cloud_id, box_id, is_synced in qs_tasks}
 
     user_map = dict(User.objects.all().values_list("origin_id", "destination_id"))
 
@@ -54,12 +57,17 @@ def migration_tasks_to_box():
     processed_tasks_ids = set()
     try:
         for task in all_cloud_tasks:
-            # Условие, чтобы не пропускать дублирующие сущности с теми же параметрами. Работает в рамках одной миграции
+            # Условие, чтобы пропускать дублирующие сущности с теми же параметрами. Работает в рамках одной миграции
             is_processed = int(task["id"] in processed_tasks_ids)
-            is_synced = int(task["id"]) in qs_synced_tasks  # Отбрасываем, те что уже перенесли
+            is_synced = int(task["id"]) in synced_task_ids  # Отбрасываем, те что уже перенесли
 
             if is_processed or is_synced:
                 continue
+
+            # Если пытаемся добавить задачу, но родительская при этом ещё не была перенесена (пропускаем)
+            if task["parentId"] and task["parentId"] != "0":
+                if not (tasks_cloud_box_id_map[int(task["parentId"])]):
+                    continue
 
             params = _params_for_tasks(task, user_map, migrated_group_ids)
             methods.append((str(task['id']), "tasks.task.add", params))
@@ -71,13 +79,16 @@ def migration_tasks_to_box():
             )
 
             for task_cloud_id, task_data in batch_result.successes.items():
-                box_task_id: str = task_data["result"]["task"]["id"]
-                box_parent_task_id: str = task_data["result"]["task"]["parentId"]  # Иногда может быть None
+                box_task_id: int = int(task_data["result"]["task"]["id"])
+                # Обработка случая когда parentId или groupId "0" или None
+                box_parent_task_id: int = int(task_data["result"]["task"]["parentId"] if (task_data["result"]["task"]["parentId"] and task_data["result"]["task"]["parentId"] != "0") else 0)
+                box_group_id: int = int(task_data["result"]["task"]["groupId"] if (task_data["result"]["task"]["groupId"] and task_data["result"]["task"]["groupId"] != "0") else 0)
 
                 bulk_data.append(TaskMigration(
                     cloud_id=int(task_cloud_id),
-                    box_id=int(box_task_id),
-                    box_parent_id=int(box_parent_task_id) if (box_parent_task_id and box_parent_task_id != "0") else 0,
+                    box_id=box_task_id,
+                    box_group_id=box_group_id,
+                    box_parent_id=box_parent_task_id,
                     is_synced=True,
                 ))
 
@@ -93,7 +104,7 @@ def migration_tasks_to_box():
         TaskMigration.objects.bulk_create(
             bulk_data,
             unique_fields=["cloud_id"],
-            update_fields=["box_id", "box_parent_id", "is_synced"],
+            update_fields=["box_id", "box_group_id", "box_parent_id", "is_synced"],
             update_conflicts=True,
         )
 
