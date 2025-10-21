@@ -3,7 +3,7 @@ from inarctica_migration.models import Group, TaskMigration
 
 from inarctica_migration.functions.helpers import debug_point
 from inarctica_migration.functions.task_migration.bx_rest_request import bx_tasks_task_list
-
+from inarctica_migration.functions.task_migration.fields import task_user_fields_in_upper, task_fields_in_upper
 
 def initialization_tasks_in_db():
     """Инициализируем задачи в БД"""
@@ -13,7 +13,10 @@ def initialization_tasks_in_db():
     qs_initialized_tasks = TaskMigration.objects.all().values_list("cloud_id", flat=True)
 
     cloud_token = CloudBitrixToken()
-    all_cloud_tasks = bx_tasks_task_list(cloud_token)
+    params = {
+     "select": ["ID", *task_fields_in_upper, *task_user_fields_in_upper]
+    }
+    all_cloud_tasks = bx_tasks_task_list(cloud_token, params=params)
 
     try:
         for task in all_cloud_tasks:
