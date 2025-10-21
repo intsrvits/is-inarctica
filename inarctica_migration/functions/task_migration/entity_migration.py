@@ -40,19 +40,29 @@ def migration_tasks_to_box():
     migrated_group_ids = dict(Group.objects.all().values_list("origin_id", "destination_id"))
     qs_initialized_tasks = TaskMigration.objects.all().values_list("cloud_id", flat=True)
 
+    user_map = dict(User.objects.all().values_list("origin_id", "destination_id"))
+
     cloud_token = CloudBitrixToken()
-    all_cloud_tasks = bx_tasks_task_list(cloud_token)
+    params = {
+        "select": ["ID", *task_fields_in_upper, *task_user_fields_in_upper]
+    }
+    all_cloud_tasks = bx_tasks_task_list(cloud_token, params=params)
 
     processed_tasks_ids = set()
-    for task in all_cloud_tasks["tasks"]:
+    for task in all_cloud_tasks:
 
         # Условие, чтобы не пропускать дублирующие сущности с теми же параметрами
         if task["id"] in processed_tasks_ids:
             continue
 
         group_id = int(task["groupId"]) if isinstance(task["groupId"], str) else None
+
         #  todo убрать это условие пока только с группами работаем
-        if not group_id:
+        if int(task['id']) != 24123:
             continue
 
+        print("HELLO")
+        params = _params_for_tasks(task, user_map, migrated_group_ids)
 
+        result = bx_tasks_task_add(BoxBitrixToken(), params)
+        return result
