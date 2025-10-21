@@ -8,10 +8,13 @@ def compare_tasks(task_ids: int | list):
         ...
     else:
         ...
-def comapare_users(user_ids: int | list, users_qs):
+
+
+def match_users(user_ids: int | list, users_map: dict):
     """Сопоставляет пользователей с облака и коробки на основе данных БД"""
     if isinstance(user_ids, int):
-        t = []
-        ...
+        # Если не найден (например уволен), то возвращаем системного пользователя
+        return users_map.get(user_ids, 1)
+
     else:
-        ...
+        return list(set([match_users(int(user_id), users_map) for user_id in user_ids]))
