@@ -14,19 +14,6 @@ def _params_for_tasks(input_params: dict, users_map: dict, group_map):
     """Преобразует поля, полученные из метода list для метода add"""
     output_params = {"fields": {}}
 
-    fields = [
-        "parentId", "title", "description",
-        "mark", "priority", "multitask",
-        "notViewed", "replicate", "createdBy",
-        "createdDate", "responsibleId", "changedDate",
-        "statusChangedBy", "closedBy", "closedDate",
-        "activityDate", "dateStart", "deadline",
-        "startDatePlan", "allowChangeDeadline", "allowTimeTracking",
-        "taskControl", "addInReport", "isMuted",
-        "isPinned", "isPinnedInGroup", "descriptionInBbcode",
-        "status", "statusChangedDate", "durationPlan",
-        "durationType", "favorite", "auditors", "accomplices"
-    ]
     for field_camel, field_upper in task_fields_map.items():
         output_params["fields"][field_upper] = input_params[field_camel]
 
