@@ -1,7 +1,7 @@
 from inarctica_migration.models import User
 
 
-def compare_tasks(task_ids: int | list):
+def match_tasks(task_ids: int | list):
     """Сопоставляет задачи с облака и коробки на основе данных БД"""
     if isinstance(task_ids, int):
         user = []
