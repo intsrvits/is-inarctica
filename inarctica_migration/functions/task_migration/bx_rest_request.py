@@ -27,4 +27,4 @@ def bx_tasks_task_add(
     https://apidocs.bitrix24.ru/api-reference/tasks/tasks-task-add.html
     """
 
-    return token.call_list_method("tasks.task.add", params, timeout=100)['tasks']
+    return token.call_list_method("tasks.task.add", params, timeout=100)
