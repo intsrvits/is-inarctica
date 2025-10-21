@@ -34,11 +34,13 @@ def _params_for_tasks(input_params: dict, users_map: dict, group_map):
 
 def migration_tasks_to_box():
     """"""
-
+    methods = []
     bulk_data = []
 
+    box_token = BoxBitrixToken()
+
     migrated_group_ids = dict(Group.objects.all().values_list("origin_id", "destination_id"))
-    qs_initialized_tasks = TaskMigration.objects.all().values_list("cloud_id", flat=True)
+    qs_synced_tasks = (TaskMigration.objects.filter(is_synced=True).values_list("cloud_id", flat=True))
 
     user_map = dict(User.objects.all().values_list("origin_id", "destination_id"))
 
@@ -48,21 +50,72 @@ def migration_tasks_to_box():
     }
     all_cloud_tasks = bx_tasks_task_list(cloud_token, params=params)
 
+    batch_result = None
     processed_tasks_ids = set()
-    for task in all_cloud_tasks:
+    try:
+        for task in all_cloud_tasks:
+            # Условие, чтобы не пропускать дублирующие сущности с теми же параметрами. Работает в рамках одной миграции
+            is_processed = int(task["id"] in processed_tasks_ids)
+            is_synced = int(task["id"]) in qs_synced_tasks  # Отбрасываем, те что уже перенесли
 
-        # Условие, чтобы не пропускать дублирующие сущности с теми же параметрами
-        if task["id"] in processed_tasks_ids:
-            continue
+            if is_processed or is_synced:
+                continue
 
-        group_id = int(task["groupId"]) if isinstance(task["groupId"], str) else None
+            params = _params_for_tasks(task, user_map, migrated_group_ids)
+            methods.append((str(task['id']), "tasks.task.add", params))
 
-        #  todo убрать это условие пока только с группами работаем
-        if int(task['id']) != 24123:
-            continue
+        if methods:
+            batch_result = box_token.batch_api_call(
+                methods,
+                halt=1
+            )
 
-        print("HELLO")
-        params = _params_for_tasks(task, user_map, migrated_group_ids)
+            for task_cloud_id, task_data in batch_result.successes.items():
+                box_task_id: str = task_data["result"]["task"]["id"]
+                box_parent_task_id: str = task_data["result"]["task"]["parentId"]  # Иногда может быть None
 
-        result = bx_tasks_task_add(BoxBitrixToken(), params)
-        return result
+                bulk_data.append(TaskMigration(
+                    cloud_id=int(task_cloud_id),
+                    box_id=int(box_task_id),
+                    box_parent_id=int(box_parent_task_id) if (box_parent_task_id and box_parent_task_id != "0") else 0,
+                    is_synced=True,
+                ))
+
+    except Exception as exc:
+        debug_point(
+            message=(
+                "❌ Произошла ошибка при переносе задач\n"
+                f"{exc}"
+            )
+        )
+
+    finally:
+        TaskMigration.objects.bulk_create(
+            bulk_data,
+            unique_fields=["cloud_id"],
+            update_fields=["box_id", "box_parent_id", "is_synced"],
+            update_conflicts=True,
+        )
+
+        if batch_result:
+            debug_point(
+                message=(
+                    "migration_tasks_to_box\n"
+                    "✅ Перенос задач отработал без ошибок \n\n"
+                    f"Создано {len(batch_result.successes)}\n\n"
+                    f"Всего в бд: {TaskMigration.objects.all().count()}\n"
+                    f"Синхронизировано (по бд): {TaskMigration.objects.filter(is_synced=True).count()}\n"
+                    f"Осталось синхронизовать: {TaskMigration.objects.filter(is_synced=False).count()}\n"
+                )
+            )
+
+        else:
+            debug_point(
+                message=(
+                    "migration_tasks_to_box\n"
+                    "✅ Не найдено групп для переноса \n\n"
+                    f"Всего в бд: {TaskMigration.objects.all().count()}\n"
+                    f"Синхронизировано (по бд): {TaskMigration.objects.filter(is_synced=True).count() + len(bulk_data)}\n"
+                    f"Осталось синхронизовать: {TaskMigration.objects.filter(is_synced=False).count() - len(bulk_data)}\n"
+                )
+            )
