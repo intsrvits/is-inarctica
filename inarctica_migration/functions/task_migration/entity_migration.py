@@ -39,7 +39,7 @@ def migration_tasks_to_box():
 
     box_token = BoxBitrixToken()
 
-    migrated_group_ids = dict(Group.objects.all().values_list("origin_id", "destination_id"))
+    migrated_group_ids: dict[int, int] = dict(Group.objects.all().values_list("origin_id", "destination_id"))
     qs_tasks = TaskMigration.objects.filter(is_synced=True).values_list("cloud_id", "box_id", "is_synced")
 
     synced_task_ids = [cloud_id for cloud_id, box_id, is_synced in qs_tasks if is_synced]
@@ -56,21 +56,27 @@ def migration_tasks_to_box():
     batch_result = None
     processed_tasks_ids = set()
     try:
+        i = 0
         for task in all_cloud_tasks:
+            i += 1
             # Условие, чтобы пропускать дублирующие сущности с теми же параметрами. Работает в рамках одной миграции
-            is_processed = int(task["id"] in processed_tasks_ids)
-            is_synced = int(task["id"]) in synced_task_ids  # Отбрасываем, те что уже перенесли
+            is_processed: bool = int(task["id"]) in processed_tasks_ids
+            group_is_not_migrated: bool = not bool(migrated_group_ids.get(int(task["groupId"]) if (task["groupId"] and task["groupId"] != "0") else 0))
+            is_synced: bool = int(task["id"]) in synced_task_ids  # Отбрасываем, те что уже перенесли
 
-            if is_processed or is_synced:
+            if is_processed or is_synced or group_is_not_migrated:
                 continue
 
             # Если пытаемся добавить задачу, но родительская при этом ещё не была перенесена (пропускаем)
             if task["parentId"] and task["parentId"] != "0":
-                if not (tasks_cloud_box_id_map[int(task["parentId"])]):
+                if not (tasks_cloud_box_id_map.get(int(task["parentId"]))):
                     continue
 
             params = _params_for_tasks(task, user_map, migrated_group_ids)
             methods.append((str(task['id']), "tasks.task.add", params))
+
+            if i==3:
+                break
 
         if methods:
             batch_result = box_token.batch_api_call(
@@ -80,6 +86,7 @@ def migration_tasks_to_box():
 
             for task_cloud_id, task_data in batch_result.successes.items():
                 box_task_id: int = int(task_data["result"]["task"]["id"])
+
                 # Обработка случая когда parentId или groupId "0" или None
                 box_parent_task_id: int = int(task_data["result"]["task"]["parentId"] if (task_data["result"]["task"]["parentId"] and task_data["result"]["task"]["parentId"] != "0") else 0)
                 box_group_id: int = int(task_data["result"]["task"]["groupId"] if (task_data["result"]["task"]["groupId"] and task_data["result"]["task"]["groupId"] != "0") else 0)
