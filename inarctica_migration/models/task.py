@@ -22,7 +22,7 @@ class TaskMigration(models.Model):
 class StageMigration(models.Model):
     """"""
 
-    cloud_id = models.IntegerField("ID на облаке", blank=True, null=True)
+    cloud_id = models.IntegerField("ID на облаке", unique=True)
     box_id = models.IntegerField("ID на коробке", blank=True, null=True)
 
     cloud_group_id = models.IntegerField("ID группы на облаке", blank=True, null=True)

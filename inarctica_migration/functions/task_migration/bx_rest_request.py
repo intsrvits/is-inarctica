@@ -43,13 +43,40 @@ def bx_tasks_task_add(
     return token.call_list_method("tasks.task.add", params, timeout=100)
 
 
+@retry_decorator(attempts=3, delay=30)
 def bx_task_stages_get(
         token: CloudBitrixToken | BoxBitrixToken,
         params: dict = None,
 ) -> Union[list, dict]:
     """
-        Запрос tasks.task.list к REST API
+        Запрос task.stages.get к REST API
         https://apidocs.bitrix24.ru/api-reference/tasks/stages/task-stages-get.html
     """
 
     return token.call_list_method("task.stages.get", params, timeout=100)
+
+
+@retry_decorator(attempts=3, delay=30)
+def bx_task_stages_add(
+        token: CloudBitrixToken | BoxBitrixToken,
+        params: dict = None,
+) -> Union[list, dict]:
+    """
+        Запрос task.stages.add к REST API
+        https://apidocs.bitrix24.ru/api-reference/tasks/stages/task-stages-add.html
+    """
+
+    return token.call_list_method("task.stages.add", params, timeout=100)
+
+
+@retry_decorator(attempts=3, delay=30)
+def bx_task_stages_update(
+        token: CloudBitrixToken | BoxBitrixToken,
+        params: dict = None,
+) -> Union[list, dict]:
+    """
+        Запрос task.stages.update к REST API
+        https://apidocs.bitrix24.ru/api-reference/tasks/stages/task-stages-update.html#parametr-fields
+    """
+
+    return token.call_list_method("task.stages.update", params, timeout=100)
