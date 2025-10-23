@@ -1,7 +1,7 @@
 # Поля задач, приведенные в camel-case (Для чтения битрикс-респонса)
 task_fields_in_camel = [
     "parentId", "title", "description",
-    "mark", "priority", "multitask",
+    "mark", "priority", "multitask", "stageId",
     "notViewed", "replicate", "groupId",
     "createdDate", "changedDate", "closedDate",
     "activityDate", "dateStart", "deadline",
@@ -22,7 +22,7 @@ task_user_fields_in_camel = [
 # Поля задач, приведенные в upper_case (Для отправки запросов на битрикс)
 task_fields_in_upper = [
     "PARENT_ID", "TITLE", "DESCRIPTION",
-    "MARK", "PRIORITY", "MULTITASK",
+    "MARK", "PRIORITY", "MULTITASK","STAGE_ID"
     "NOT_VIEWED", "REPLICATE", "GROUP_ID",
     "CREATED_DATE", "CHANGED_DATE", "CLOSED_DATE",
     "ACTIVITY_DATE", "DATE_START", "DEADLINE",
@@ -45,6 +45,7 @@ task_fields_map = {
     "title": "TITLE",
     "description": "DESCRIPTION",
     "mark": "MARK",
+    "stageId": "STAGE_ID",
     "priority": "PRIORITY",
     "multitask": "MULTITASK",
     "notViewed": "NOT_VIEWED",
