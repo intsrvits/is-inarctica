@@ -10,6 +10,14 @@ from inarctica_migration.functions.task_migration.fields import (task_fields_map
                                                                  task_user_fields_in_upper, )
 
 
+def _safe_int(value, default=0):
+    """Безопасно приводит значение к int."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def _params_for_tasks(input_params: dict, users_map: dict, group_map):
     """Преобразует поля, полученные из метода list для метода add"""
     output_params = {"fields": {}}
