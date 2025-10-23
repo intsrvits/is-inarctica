@@ -52,4 +52,4 @@ def bx_task_stages_get(
         https://apidocs.bitrix24.ru/api-reference/tasks/stages/task-stages-get.html
     """
 
-    return token.call_list_method("tasks.stages.get", params, timeout=100)
+    return token.call_list_method("task.stages.get", params, timeout=100)
