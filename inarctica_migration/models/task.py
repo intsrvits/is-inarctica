@@ -19,7 +19,7 @@ class TaskMigration(models.Model):
         list_display = ("cloud_id", "box_id", "box_group_id", "group_is_sync", "cloud_parent_id", "box_parent_id", "is_synced")
 
 
-class stageMigration(models.Model):
+class StageMigration(models.Model):
     """"""
 
     cloud_id = models.IntegerField("ID на облаке", blank=True, null=True)
