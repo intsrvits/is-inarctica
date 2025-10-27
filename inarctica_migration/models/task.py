@@ -14,6 +14,7 @@ class TaskMigration(models.Model):
     box_parent_id = models.IntegerField("ID родительской задачи на коробке", blank=True, null=True)
 
     is_synced = models.BooleanField("Запись синхронизирована", default=False)
+    with_files = models.BooleanField("Есть прикреплённые файлы", default=False)
 
     class Admin(admin.ModelAdmin):
         list_display = ("cloud_id", "box_id", "box_group_id", "group_is_sync", "cloud_parent_id", "box_parent_id", "is_synced")
