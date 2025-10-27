@@ -80,3 +80,16 @@ def bx_task_stages_update(
     """
 
     return token.call_list_method("task.stages.update", params, timeout=100)
+
+
+@retry_decorator(attempts=3, delay=30)
+def bx_task_commentitem_getlist(
+        token: CloudBitrixToken,
+        params: dict = None,
+):
+    """
+    Запрос task.commentitem.getlist к REST API
+    https://apidocs.bitrix24.ru/api-reference/tasks/comment-item/task-comment-item-get-list.html
+    """
+
+    return token.call_list_method("task.stages.update", params, timeout=100)
