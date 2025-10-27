@@ -18,7 +18,7 @@ def _safe_int(value, default=0):
         return default
 
 
-def _params_for_tasks(input_params: dict, users_map: dict, group_map):
+def _params_for_tasks(input_params: dict, users_map: dict, group_map, stage_map, tasks_cloud_box_id_map):
     """Преобразует поля, полученные из метода list для метода add"""
     output_params = {"fields": {}}
 
@@ -36,7 +36,8 @@ def _params_for_tasks(input_params: dict, users_map: dict, group_map):
     # Перезаписываем поле GROUP_ID на его группу-двойника с коробки.
     # Если в респонсе пришёл groupId="0" или None, то оставляем задач без привязки к группе.
     output_params["fields"]["GROUP_ID"] = group_map[int(input_params["groupId"])] if (input_params["groupId"] and input_params["groupId"] != "0") else None
-
+    output_params["fields"]["STAGE_ID"] = stage_map[int(input_params["stageId"])] if int(input_params["stageId"]) != 0 else 0
+    output_params["fields"]["PARENT_ID"] = tasks_cloud_box_id_map[_safe_int(input_params["parentId"])] if _safe_int(input_params["parentId"]) else 0
     return output_params
 
 
@@ -46,6 +47,8 @@ def migration_tasks_to_box():
     bulk_data = []
 
     box_token = BoxBitrixToken()
+
+    stage_map: dict[int, int] = dict(StageMigration.objects.all().values_list("cloud_id", "box_id"))
 
     migrated_group_ids: dict[int, int] = dict(Group.objects.all().values_list("origin_id", "destination_id"))
     qs_tasks = TaskMigration.objects.filter(is_synced=True).values_list("cloud_id", "box_id", "is_synced")
@@ -57,39 +60,49 @@ def migration_tasks_to_box():
 
     cloud_token = CloudBitrixToken()
     params = {
-        "select": ["ID", *task_fields_in_upper, *task_user_fields_in_upper]
+        "select": ["ID", *task_fields_in_upper, *task_user_fields_in_upper, "UF_TASK_WEBDAV_FILES"]
     }
     all_cloud_tasks = bx_tasks_task_list(cloud_token, params=params)
 
     batch_result = None
     processed_tasks_ids = set()
     try:
-        i = 0
+        with_files_map = {}
+
         for task in all_cloud_tasks:
-            i += 1
+
             # Условие, чтобы пропускать дублирующие сущности с теми же параметрами. Работает в рамках одной миграции
             is_processed: bool = int(task["id"]) in processed_tasks_ids
-            group_is_not_migrated: bool = not bool(migrated_group_ids.get(int(task["groupId"]) if (task["groupId"] and task["groupId"] != "0") else 0))
+            group_is_not_migrated: bool = not bool(migrated_group_ids.get(int(task["groupId"])))
             is_synced: bool = int(task["id"]) in synced_task_ids  # Отбрасываем, те что уже перенесли
+
+ #            if task["groupId"] not in ['231', '233', '239', '241', '243', '245', '247', '257', '265', '267']:
+
+            if task["groupId"] in ['245']:
+                continue
 
             if is_processed or is_synced or group_is_not_migrated:
                 continue
+
+            if task.get("ufTaskWebdavFiles"):
+                with_files_map[str(task['id'])] = True
+
+            else:
+                with_files_map[str(task['id'])] = False
 
             # Если пытаемся добавить задачу, но родительская при этом ещё не была перенесена (пропускаем)
             if task["parentId"] and task["parentId"] != "0":
                 if not (tasks_cloud_box_id_map.get(int(task["parentId"]))):
                     continue
 
-            params = _params_for_tasks(task, user_map, migrated_group_ids)
+            params = _params_for_tasks(task, user_map, migrated_group_ids, stage_map, tasks_cloud_box_id_map)
             methods.append((str(task['id']), "tasks.task.add", params))
-
-            if i == 6:
-                break
 
         if methods:
             batch_result = box_token.batch_api_call(
                 methods,
-                halt=1
+                halt=1,
+                timeout=40,
             )
 
             for task_cloud_id, task_data in batch_result.successes.items():
@@ -105,6 +118,7 @@ def migration_tasks_to_box():
                     box_group_id=box_group_id,
                     box_parent_id=box_parent_task_id,
                     is_synced=True,
+                    with_files=with_files_map[task_cloud_id],
                 ))
 
     except Exception as exc:
@@ -119,7 +133,7 @@ def migration_tasks_to_box():
         TaskMigration.objects.bulk_create(
             bulk_data,
             unique_fields=["cloud_id"],
-            update_fields=["box_id", "box_group_id", "box_parent_id", "is_synced"],
+            update_fields=["box_id", "box_group_id", "box_parent_id", "is_synced", "with_files"],
             update_conflicts=True,
         )
 
