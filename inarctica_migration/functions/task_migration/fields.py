@@ -22,7 +22,7 @@ task_user_fields_in_camel = [
 # Поля задач, приведенные в upper_case (Для отправки запросов на битрикс)
 task_fields_in_upper = [
     "PARENT_ID", "TITLE", "DESCRIPTION",
-    "MARK", "PRIORITY", "MULTITASK","STAGE_ID"
+    "MARK", "PRIORITY", "MULTITASK", "STAGE_ID",
     "NOT_VIEWED", "REPLICATE", "GROUP_ID",
     "CREATED_DATE", "CHANGED_DATE", "CLOSED_DATE",
     "ACTIVITY_DATE", "DATE_START", "DEADLINE",
@@ -84,3 +84,17 @@ task_user_fields_map = {
     "auditors": "AUDITORS",
     "accomplices": "ACCOMPLICES",
 }
+
+SYSTEM_COMMNETS = (
+        "задача просрочена",
+        "задача почти просрочена",
+        "проект задачи изменен на",
+        "вы назначены ответственным",
+        "вы назначены соисполнителем",
+        "завершите задачу или передвиньте срок",
+        "вы добавлены наблюдателем",
+        "крайний срок изменен на",
+        "необходимо указать крайний срок",
+        "задача возвращена в работу",
+        "задача завершена",
+    )
