@@ -16,6 +16,10 @@ class TaskMigration(models.Model):
     is_synced = models.BooleanField("Запись синхронизирована", default=False)
     with_files = models.BooleanField("Есть прикреплённые файлы", default=False)
 
+    comm_cloud_cnt = models.IntegerField("Кол-во комментариев (облако)", blank=True, null=True)
+    comm_box_cnt = models.IntegerField("Кол-во комментариев (коробка)", blank=True, null=True)
+    comm_sync = models.BooleanField("Комментарии синхронизованы", default=False)
+
     class Admin(admin.ModelAdmin):
         list_display = ("cloud_id", "box_id", "box_group_id", "group_is_sync", "cloud_parent_id", "box_parent_id", "is_synced")
 
@@ -33,3 +37,18 @@ class StageMigration(models.Model):
 
     class Admin(admin.ModelAdmin):
         list_display = ("cloud_id", "box_id", "cloud_group_id", "box_group_id")
+
+
+class CommentMigration(models.Model):
+    """"""
+
+    cloud_id = models.IntegerField("ID на облаке", unique=True)
+    box_id = models.IntegerField("ID на коробке", blank=True, null=True)
+
+    cloud_task_id = models.IntegerField("ID задачи на облаке", blank=True, null=True)
+    box_task_id = models.IntegerField("ID группы на коробке", blank=True, null=True)
+
+    with_files = models.BooleanField("Есть прикреплённые файлы", default=False)
+
+    class Admin(admin.ModelAdmin):
+        list_display = ("cloud_id", "box_id", "cloud_task_id", "box_task_id", "with_files")
