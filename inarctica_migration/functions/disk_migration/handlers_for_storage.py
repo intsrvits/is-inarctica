@@ -3,7 +3,7 @@ from inarctica_migration.models.disk import Storage
 
 from inarctica_migration.utils import CloudBitrixToken, BoxBitrixToken
 from inarctica_migration.functions.helpers import debug_point
-from inarctica_migration.functions.disk_migration.bx_rest_requests import _bx_storage_getlist
+from inarctica_migration.functions.disk_migration.bx_rest_requests import bx_storage_getlist
 
 
 def synchronize_storages(
@@ -31,8 +31,8 @@ def synchronize_storages(
     groups_cloud_box_map: dict[int, int] = dict(Group.objects.all().values_list("origin_id", "destination_id"))
 
     try:
-        current_cloud_storages = _bx_storage_getlist(cloud_token)
-        current_box_storages = _bx_storage_getlist(box_token)
+        current_cloud_storages = bx_storage_getlist(cloud_token)
+        current_box_storages = bx_storage_getlist(box_token)
 
         # Сравниваем все хранилища облака со всеми хранилищами коробки для нахождения идентичных
         for cloud_storage in current_cloud_storages:
