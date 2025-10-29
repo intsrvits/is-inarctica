@@ -48,24 +48,39 @@ def get_comments_to_migration(cloud_token: CloudBitrixToken, task_id: int) -> di
     return comments_to_migrate
 
 
-def _replace_user_id(match):
-    cloud_id = int(match.group(1))  # вытащили число из [USER=208]
-
+def _replace_user_id(match: re.Match) -> str:
+    """Заменяет [USER=cloud_id] на [USER=box_id]."""
+    cloud_id = int(match.group(1))
     user = User.objects.filter(origin_id=cloud_id).first()
-    if user:
-        box_id = user.destination_id
-    else:
-        box_id = 1
-
+    box_id = user.destination_id if user else 1
     return f"[USER={box_id}]"
 
 
-def clean_post_message(text: str) -> str:
-    """"""
-    #text_without_tags = re.sub(r"\s*\[DISK FILE ID=n\d+\]\s*", "", text)
+def clean_post_message(text: str, attachment_file_id_map: dict | None) -> str:
+    """
+    Подготавливает текст поста:
+    - заменяет [USER=cloud_id] → [USER=box_id]
+    - заменяет [DISK FILE ID=n123] → [DISK FILE ID=<новый_id>] по словарю
+    - если текст пустой — возвращает "Прикрепление файлов"
+    """
+
+    # Замена пользователей
     prepared_text = re.sub(r'\[USER=(\d+)\]', _replace_user_id, text)
 
-    if not prepared_text.replace(" ", "").replace("\n", "").replace("\r", ""):
+    # Замена файлов, если передан словарь
+    if attachment_file_id_map:
+        def _replace_disk_id(match: re.Match) -> str:
+            disk_id = int(match.group(1)[1:])
+            new_id = attachment_file_id_map.get(disk_id)
+            if new_id:
+                return f"[DISK FILE ID=n{new_id}]"
+            # если не найдено в словаре — можно удалить тег
+            return ""
+
+        prepared_text = re.sub(r'\[DISK FILE ID=(n\d+)\]', _replace_disk_id, prepared_text)
+
+    # Если после замены остался только "пустой" текст
+    if not prepared_text.strip():
         return "Прикрепление файлов"
 
     return prepared_text
