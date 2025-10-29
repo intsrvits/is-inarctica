@@ -92,4 +92,18 @@ def bx_task_commentitem_getlist(
     https://apidocs.bitrix24.ru/api-reference/tasks/comment-item/task-comment-item-get-list.html
     """
 
-    return token.call_list_method("task.stages.update", params, timeout=100)
+    return token.call_list_method("task.commentitem.getlist", params, timeout=100)
+
+
+@retry_decorator(attempts=3, delay=30)
+def bx_task_commentitem_add(
+        token: BoxBitrixToken,
+        params: dict = None,
+):
+    """
+    Запрос task.commentitem.add к REST API
+    https://apidocs.bitrix24.ru/api-reference/tasks/comment-item/task-comment-item-add.html
+    """
+
+    return token.call_list_method("task.commentitem.add", params, timeout=100)
+

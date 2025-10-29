@@ -5,10 +5,10 @@ from inarctica_migration.utils import CloudBitrixToken, BoxBitrixToken
 
 
 @retry_decorator(attempts=3, delay=30)
-def _bx_storage_getlist(token: CloudBitrixToken | BoxBitrixToken) -> Union[list, dict]:
+def bx_storage_getlist(token: CloudBitrixToken | BoxBitrixToken, fields=None) -> Union[list, dict]:
     """Запрос disk.storage.getlist к REST API"""
 
-    return token.call_list_method("disk.storage.getlist", timeout=100)
+    return token.call_list_method("disk.storage.getlist", fields=fields, timeout=100)
 
 
 @retry_decorator(attempts=3, delay=30)
@@ -38,3 +38,12 @@ def _bx_folder_uploadfile(
 ) -> dict:
     """"""
     return token.call_api_method("disk.folder.uploadFile", params, timeout=300)
+
+
+@retry_decorator(attempts=3, delay=30)
+def bx_disk_storage_uploadFile(
+        token: BoxBitrixToken,
+        params: dict | None = None,
+):
+    """"""
+    return token.call_api_method("disk.storage.uploadFile", params, timeout=300)
