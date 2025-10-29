@@ -1,11 +1,25 @@
-from inarctica_migration.utils import BoxBitrixToken
+from inarctica_migration.utils import CloudBitrixToken, BoxBitrixToken
 from inarctica_migration.models import Group
 
 from inarctica_migration.functions.helpers import debug_point
 
 
+def descripton_handler(description: str, cloud_attached_ids: list):
+    """
+    Принимает описание задачи с cloud-портала, ищет теги [DISK FILE ID=n].
+    Запрашивает информацию о прикрепленных файлах, сопоставляет attachedId с objectId (objectId указан в теге)
+    Прикрепляет файлы к задаче на бокс портале,
+    :param description:
+    :param cloud_attached_ids:
+    :return:
+    """
+
+    cloud_token = CloudBitrixToken()
+    box_token = BoxBitrixToken()
+
+
 def delete_box_stages():
-    """"""
+    """Удаляет все возможные стадии с коробочного портала"""
     methods_to_get, methods_to_delete = [], []
     batch_get_result, batch_delete_result = None, None
 
