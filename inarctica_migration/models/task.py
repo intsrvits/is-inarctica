@@ -14,7 +14,9 @@ class TaskMigration(models.Model):
     box_parent_id = models.IntegerField("ID родительской задачи на коробке", blank=True, null=True)
 
     is_synced = models.BooleanField("Запись синхронизирована", default=False)
-    with_files = models.BooleanField("Есть прикреплённые файлы", default=False)
+
+    attached_files = models.IntegerField("Кол-во прикрепленных файлов", default=0, blank=True, null=True)
+    file_synced = models.BooleanField("Синхронизация по файлам", default=False)
 
     comm_cloud_cnt = models.IntegerField("Кол-во комментариев (облако)", blank=True, null=True)
     comm_box_cnt = models.IntegerField("Кол-во комментариев (коробка)", blank=True, null=True)
