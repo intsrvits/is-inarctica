@@ -14,6 +14,7 @@ from inarctica_migration.functions.task_migration.tasks_comments.attached_file_h
 
 def migrate_task_comments():
     """"""
+    bulk_data = []
 
     cloud_token = CloudBitrixToken()
     box_token = BoxBitrixToken()
@@ -52,9 +53,6 @@ def migrate_task_comments():
         tasks_by_box_group_map[box_group_id].append((cloud_id, box_id))
 
     for box_group_id, group_tasks in tasks_by_box_group_map.items():
-        # # todo убрать после тестирования
-        # if box_group_id < 50:
-        #     continue
 
         # Обрабатываем каждую из списка задач группы. group_tasks - это список кортежей, где кортеж (cloud_task_id, box_task_id)
         for cloud_task_id, box_task_id in group_tasks:
