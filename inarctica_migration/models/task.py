@@ -77,11 +77,12 @@ class TaskAttachedFiles(models.Model):
 
 class ChecklistPoints(models.Model):
     """"""
+    cloud_task_id = models.IntegerField("ID задачи на облаке", blank=True, null=True)
 
     cloud_id = models.IntegerField("ID на облаке", unique=True)
     box_id = models.IntegerField("ID на коробке", blank=True, null=True)
 
-    parent_cloud_id = models.IntegerField("родительское ID на облаке", unique=True)
+    parent_cloud_id = models.IntegerField("родительское ID на облаке", blank=True, null=True)
     parent_box_id = models.IntegerField("родительское ID на коробке", blank=True, null=True)
 
     with_files = models.BooleanField("Есть прикреплённые файлы", default=False)
