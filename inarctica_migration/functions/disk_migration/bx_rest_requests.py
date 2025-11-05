@@ -47,3 +47,12 @@ def bx_disk_storage_uploadFile(
 ):
     """"""
     return token.call_api_method("disk.storage.uploadFile", params, timeout=300)
+
+
+@retry_decorator(attempts=3, delay=30)
+def bx_disk_attachedObject_get(
+        token: CloudBitrixToken,
+        params: dict,
+):
+    """"""
+    return token.call_list_method("disk.attachedObject.get", params, timeout=300)

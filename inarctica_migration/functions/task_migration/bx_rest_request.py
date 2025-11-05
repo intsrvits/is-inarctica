@@ -106,4 +106,3 @@ def bx_task_commentitem_add(
     """
 
     return token.call_list_method("task.commentitem.add", params, timeout=100)
-
