@@ -17,10 +17,13 @@ class TaskMigration(models.Model):
 
     attached_files = models.IntegerField("Кол-во прикрепленных файлов", default=0, blank=True, null=True)
     file_synced = models.BooleanField("Синхронизация по файлам", default=False)
+    desc_updated = models.BooleanField("Описание обновлено", default=False)
 
     comm_cloud_cnt = models.IntegerField("Кол-во комментариев (облако)", blank=True, null=True)
     comm_box_cnt = models.IntegerField("Кол-во комментариев (коробка)", blank=True, null=True)
     comm_sync = models.BooleanField("Комментарии синхронизованы", default=False)
+
+    checklist_cnt = models.IntegerField("Кол-во чеклистов в задаче", blank=True, null=True)
 
     class Admin(admin.ModelAdmin):
         list_display = ("cloud_id", "box_id", "box_group_id", "group_is_sync", "cloud_parent_id", "box_parent_id", "is_synced")
@@ -54,3 +57,35 @@ class CommentMigration(models.Model):
 
     class Admin(admin.ModelAdmin):
         list_display = ("cloud_id", "box_id", "cloud_task_id", "box_task_id", "with_files")
+
+
+class TaskAttachedFiles(models.Model):
+    """"""
+
+    cloud_id = models.IntegerField("ID на облаке", unique=True)
+    box_id = models.IntegerField("ID на коробке", blank=True, null=True)
+
+    cloud_obj_id = models.IntegerField("objectID на облаке", blank=True, null=True)
+    box_obj_id = models.IntegerField("objectID на коробке", blank=True, null=True)
+
+    cloud_task_id = models.IntegerField("ID группы на облаке", blank=True, null=True)
+    box_task_id = models.IntegerField("ID группы коробке", blank=True, null=True)
+
+    class Admin(admin.ModelAdmin):
+        list_display = ("cloud_id", "box_id", "cloud_obj_id", "box_obj_id", "cloud_task_id", "box_task_id")
+
+
+class ChecklistPoints(models.Model):
+    """"""
+
+    cloud_id = models.IntegerField("ID на облаке", unique=True)
+    box_id = models.IntegerField("ID на коробке", blank=True, null=True)
+
+    parent_cloud_id = models.IntegerField("родительское ID на облаке", unique=True)
+    parent_box_id = models.IntegerField("родительское ID на коробке", blank=True, null=True)
+
+    with_files = models.BooleanField("Есть прикреплённые файлы", default=False)
+    is_synced = models.BooleanField("Синхронизировано", default=False)
+
+    class Admin(admin.ModelAdmin):
+        list_display = ("cloud_id", "box_id", "parent_cloud_id", "parent_box_id", "with_files", "is_synced")
