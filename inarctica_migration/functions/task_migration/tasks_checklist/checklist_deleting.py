@@ -25,7 +25,7 @@ def _append_batch_to_delete_checklists(task_id: int, task_checklists: Dict[int, 
 
 
 def delete_all_task_checklists():
-    """"""
+    """Удаляет все чеклисты с бокс-портала и чистит БД"""
     token = BoxBitrixToken()
 
     migrated_tasks: Dict[int, int] = dict(TaskMigration.objects.filter(is_synced=True, checklist_cnt__gt=0).values_list("cloud_id", "box_id"))
