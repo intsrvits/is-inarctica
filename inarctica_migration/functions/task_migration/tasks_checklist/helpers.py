@@ -1,3 +1,5 @@
+from typing import List
+
 from inarctica_migration.functions.helpers import debug_point
 from inarctica_migration.functions.task_migration.bx_rest_request import bx_tasks_task_list
 from inarctica_migration.functions.task_migration.tasks_checklist.bx_rest_request import bx_task_checklistitem_getlist
@@ -34,20 +36,11 @@ def fill_db_checklist_cnt_field():
     try:
         for task in task_to_process:
             task_cloud_id = task.cloud_id
-            task_box_id = task.box_id
-
-            # #fixme
-            # if task_cloud_id != 24123:
-            #     continue
 
             batch_data.append((str(task_cloud_id), "task.checklistitem.getlist", {"TASKID": task_cloud_id}))  # Через лист почему-то не получается селект чеклистов сделать - поэтому батч
 
         batch_result = cloud_token.batch_api_call(batch_data, timeout=30)
-        pass
-        # return batch_result
 
-        # if not batch_result.all_ok:
-        #     debug_point(f"Произошла ошибка во время batch запроса: {batch_result.errors}")
 
     except Exception as exc:
         debug_point(f"Произошла ошибка (1):\n"
@@ -85,13 +78,8 @@ def initialize_checklists_points():
     batch_data = []
 
     cloud_token = CloudBitrixToken()
-    # params = {
-    #     "select": ["ID", "CHECKLIST", "checklist", "CHECKLIST"]
-    # }
-    # cloud_tasks = bx_tasks_task_list(cloud_token, params)
-    # checklists_cnt_by_id = {int(task['id']): len(task.get('checklist', [])) for task in cloud_tasks}
-
     task_to_process = TaskMigration.objects.filter(box_group_id__isnull=False, checklist_cnt__gt=0)
+
     try:
         for task in task_to_process:
             task_cloud_id = task.cloud_id
@@ -134,6 +122,58 @@ def initialize_checklists_points():
 
         debug_point(f"Проинициализировано {len(bulk_data)} элементов чек-листов")
 
-# def comp():
-#     fill_db_checklist_cnt_field()
-#     initialize_checklists_points()
+
+def get_task_checklist_map(batch_successes: dict) -> dict[int, dict[int, dict]]:
+    """
+    type(batch_result): dict_items
+
+    Возвращает структуру, к которой удобно обращаться по ключам:
+    task_id -> checklist_id -> checklist_data
+    """
+    result = {}
+    for cloud_task_id, cloud_checklist in batch_successes.items():
+        task_id = int(cloud_task_id)
+        checklists = cloud_checklist["result"]
+
+        # Превращаем список чеклистов в словарь по ID
+        checklist_dict = {
+            int(item["ID"]): item
+            for item in checklists
+            if "ID" in item
+        }
+
+        result[task_id] = checklist_dict
+
+    return result
+
+
+def get_all_checklists(token, task_ids: List[int]):
+    """Возвращает результат батча при взятии чеклистов у задач"""
+    batch_to_get = []
+
+    for task_id in task_ids:
+        batch_to_get.append((str(task_id), "task.checklistitem.getlist", {"TASKID": task_id}))
+
+    batch_get_result = token.batch_api_call(batch_to_get, timeout=30)
+
+    # if not batch_get_result.all_ok:
+    #     debug_point(f"Произошла ошибка во время batch запроса: {batch_get_result.errors}")
+    #     raise
+    pass
+    return batch_get_result.successes
+
+
+def get_checklists_with_attached_files():
+    """"""
+    migrated_task: dict[int, int] = dict(TaskMigration.objects.values_list("cloud_id", "box_id"))
+    checklist_with_attaches: dict[int, int] = dict(ChecklistPoints.objects.filter(with_files=True).values_list("cloud_id", "cloud_task_id"))
+
+    for checklist_id, cloud_task_id in checklist_with_attaches.items():
+        box_task_id = migrated_task[cloud_task_id]
+        debug_point(
+            f"Нужно добавить файл к чеклисту в задаче cloudID: {cloud_task_id}"
+            f"https://inarctica.bitrix24.ru/workgroups/group/379/tasks/task/view/{cloud_task_id}/\n\n"
+            f"Для задачи с boxID = {box_task_id}\n"
+            f"https://bitrix24.inarctica.com/company/personal/user/1/tasks/task/view/{box_task_id}/\n\n"
+            f"чеклиcт cloudID {checklist_id}"
+        )
