@@ -6,7 +6,7 @@ import requests
 
 from integration_utils.bitrix24.exceptions import BitrixApiException, BitrixApiError
 
-from inarctica_migration.functions.helpers import retry_decorator
+from inarctica_migration.functions.helpers import retry_decorator, debug_point
 from inarctica_migration.models import User, Department
 from inarctica_migration.utils import CloudBitrixToken, BoxBitrixToken
 
@@ -141,12 +141,13 @@ def migrate_users():
                 bulk_data.append(User(
                     origin_id=int(user['ID']),
                     destination_id=int(destination_id),
+                    is_user_migrated=True,
                 ))
 
         User.objects.bulk_create(
             bulk_data,
             unique_fields=["origin_id"],
-            update_fields=["destination_id"],
+            update_fields=["destination_id", "is_user_migrated"],
             update_conflicts=True,
         )
 
@@ -156,8 +157,39 @@ def migrate_users():
         User.objects.bulk_create(
             bulk_data,
             unique_fields=["origin_id"],
-            update_fields=["destination_id"],
+            update_fields=["destination_id", "is_user_migrated"],
             update_conflicts=True,
         )
 
         raise
+
+
+def update_user():
+    """
+    Обновляет поля пользователя
+    Функция возникла в результате доработок проекта."""
+    methods = []
+    cloud_token = CloudBitrixToken()
+    box_token = BoxBitrixToken()
+
+    migrated_users_map: dict[int, int] = dict(User.objects.filter(is_user_migrated=True).values_list("origin_id", "destination_id"))
+    cloud_users = cloud_token.call_list_method('user.get', {'filter': {'ACTIVE': 1, '!USER_TYPE': 'extranet'}, 'ADMIN_MODE': 1})
+
+    for cloud_user in cloud_users:
+        box_user_id: int = migrated_users_map.get(int(cloud_user['ID']), 0)
+
+        if box_user_id:
+            params_to_update = {
+                "ID": box_user_id,
+                "PERSONAL_BIRTHDAY": cloud_user["PERSONAL_BIRTHDAY"],
+                "UF_EMPLOYMENT_DATE": cloud_user["UF_EMPLOYMENT_DATE"],
+                "UF_SKYPE_LINK": cloud_user.get("UF_SKYPE_LINK"),
+                "UF_SKYPE": cloud_user.get("UF_SKYPE"),
+            }
+            methods.append((cloud_user['ID'], "user.update", params_to_update))
+
+    batch_result = box_token.batch_api_call(methods, halt=1)
+
+    debug_point("Обновление полей пользователя (update_user)\n"
+                f"Всего перенесенных пользователей: {len(migrated_users_map)}"
+                f"Обновлено: {len(batch_result.successes)}")
