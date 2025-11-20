@@ -100,7 +100,7 @@ def migrate_all_task_checklists():
 
     cloud_token = CloudBitrixToken()
 
-    migrated_tasks: Dict[int, int] = dict(TaskMigration.objects.filter(is_synced=True, checklist_cnt__gt=0).values_list("cloud_id", "box_id"))
+    migrated_tasks: Dict[int, int] = dict(TaskMigration.objects.filter(is_synced=True, comm_sync=True, box_group_id=0).values_list("cloud_id", "box_id"))
     box_all_checklists = get_all_checklists(cloud_token, list(migrated_tasks.keys()))
 
     # Получаем структуру task_id -> checklist_id -> checklist_data
@@ -115,7 +115,7 @@ def migrate_all_task_checklists():
         task_ids = (task_id, migrated_tasks[task_id])  # Кортеж айдишников задачи с разных порталов
 
         _creation_cycle_for_task_checklists(task_ids, checklists_dict)
-
+        TaskMigration.objects.filter(cloud_id=int(task_id)).update(checklist_cnt=len(checklists_dict))
 #
 #
 #

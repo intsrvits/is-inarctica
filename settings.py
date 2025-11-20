@@ -26,6 +26,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'integration_utils.bitrix24',
     'inarctica_migration',
+    "b24",
 ]
 
 MIDDLEWARE = [

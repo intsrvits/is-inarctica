@@ -13,3 +13,14 @@ class LogMigration(models.Model):
 
     class Admin(admin.ModelAdmin):
         list_display = ("cloud_id", "box_id", "dest", "is_synced")
+
+
+class BlogPostsUpdating(models.Model):
+    """"""
+    success = models.BooleanField(default=False),
+    id_was = models.IntegerField("ID которое было на коробке", blank=True, null=True)
+    id_become = models.IntegerField("ID которое стало на коробке", unique=True)
+    cloud_id = models.IntegerField("ID которое есть на облаке", blank=True, null=True)
+
+    class Admin(admin.ModelAdmin):
+        list_display = ("success", "id_was", "id_become", "cloud_id")

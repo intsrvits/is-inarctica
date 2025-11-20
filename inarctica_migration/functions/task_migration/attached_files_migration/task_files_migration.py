@@ -155,10 +155,11 @@ def attach_file_to_task():
     box_token = BoxBitrixToken()
 
     # Берём задачи с прикрепленными файлами
-    task_to_process_qs = TaskMigration.objects.filter(box_group_id__isnull=False, file_synced=False)
+    task_to_process_qs = TaskMigration.objects.filter(box_group_id=0, is_synced=True, file_synced=False)
     file_ids_map = dict(TaskAttachedFiles.objects.values_list("cloud_id", "box_id"))
 
     params = {
+        "filter": {"GROUP_ID": 0},
         "select": ["ID", "UF_TASK_WEBDAV_FILES"]
     }
 
@@ -170,11 +171,19 @@ def attach_file_to_task():
         for task in task_to_process_qs:
             cloud_task_id = task.cloud_id
             box_task_id = task.box_id
-            # if cloud_task_id != 35:
-            #     continue
 
-            cloud_attached_files = cloud_tasks_by_id[cloud_task_id]["ufTaskWebdavFiles"]
+            # Проверяем если задача была удалена
+            cloud_task = cloud_tasks_by_id.get(cloud_task_id, 0)
+            if not cloud_task:
+                continue
+
+            # Проверяем есть ли у задачи прикрепленные файлы
+            cloud_attached_files = cloud_task.get("ufTaskWebdavFiles", [])
             box_attached_files = []
+            if not cloud_attached_files:
+                task.file_synced = True
+                continue
+
             for file_id in cloud_attached_files:
                 box_file_id = file_ids_map[file_id]
                 box_attached_files.append(box_file_id)

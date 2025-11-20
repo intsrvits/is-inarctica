@@ -182,14 +182,18 @@ def update_user():
             params_to_update = {
                 "ID": box_user_id,
                 "PERSONAL_BIRTHDAY": cloud_user["PERSONAL_BIRTHDAY"],
-                "UF_EMPLOYMENT_DATE": cloud_user["UF_EMPLOYMENT_DATE"],
+                # "UF_EMPLOYMENT_DATE": cloud_user["UF_EMPLOYMENT_DATE"][:10],
                 "UF_SKYPE_LINK": cloud_user.get("UF_SKYPE_LINK"),
                 "UF_SKYPE": cloud_user.get("UF_SKYPE"),
             }
             methods.append((cloud_user['ID'], "user.update", params_to_update))
-
-    batch_result = box_token.batch_api_call(methods, halt=1)
+            if cloud_user.get("UF_SKYPE_LINK") or cloud_user.get("UF_SKYPE"):
+                debug_point(f"https://inarctica.bitrix24.ru/company/personal/user/{cloud_user['ID']}/"
+                            f"https://bitrix24.inarctica.com/company/personal/user/{box_user_id}/")
+    batch_result = box_token.batch_api_call(methods)
 
     debug_point("Обновление полей пользователя (update_user)\n"
                 f"Всего перенесенных пользователей: {len(migrated_users_map)}"
                 f"Обновлено: {len(batch_result.successes)}")
+
+    return batch_result
