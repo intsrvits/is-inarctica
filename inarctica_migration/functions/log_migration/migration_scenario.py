@@ -119,6 +119,11 @@ def migrate_blogposts():
             dest=dest,
             is_synced=True,
         )
+        debug_point("Перенесён блогпост: \n"
+                    f"cloudId: {blogpost_id} https://inarctica.bitrix24.ru/company/personal/user/1/blog/{blogpost_id}/\n"
+                    f"boxId: {migrated_blogpost_box_id} https://bitrix24.inarctica.com/company/personal/user/1/blog/{migrated_blogpost_box_id}/\n",
+                    with_tags=False
+                    )
 
     debug_point("Миграция блогпостов окончена\n"
                 f"На облаке {len(prepared_blog_posts)}"
