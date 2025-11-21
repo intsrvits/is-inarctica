@@ -9,7 +9,7 @@ class BForumMessage(models.Model):
     id = models.BigAutoField(db_column='ID', primary_key=True)  # Field name made lowercase.
     forum_id = models.IntegerField(db_column='FORUM_ID')  # Field name made lowercase.
     #topic_id = models.BigIntegerField(db_column='TOPIC_ID')  # Field name made lowercase.
-    topic = models.ForeignKey('BForumTopic', db_column='TOPIC_ID', on_delete=models.PROTECT)  # Field name made lowercase.
+    # topic = models.ForeignKey('BForumTopic', db_column='TOPIC_ID', on_delete=models.PROTECT)  # Field name made lowercase.
     use_smiles = models.CharField(db_column='USE_SMILES', max_length=1)  # Field name made lowercase.
     new_topic = models.CharField(db_column='NEW_TOPIC', max_length=1)  # Field name made lowercase.
     approved = models.CharField(db_column='APPROVED', max_length=1)  # Field name made lowercase.
@@ -23,7 +23,7 @@ class BForumMessage(models.Model):
     param1 = models.CharField(db_column='PARAM1', max_length=2, blank=True, null=True)  # Field name made lowercase.
     param2 = models.IntegerField(db_column='PARAM2', blank=True, null=True)  # Field name made lowercase.
     #author_id = models.IntegerField(db_column='AUTHOR_ID', blank=True, null=True)  # Field name made lowercase.
-    author = models.ForeignKey('b24_itsolution.BUser', on_delete=models.PROTECT, blank=True, null=True)  # Field name made lowercase.
+    # author = models.ForeignKey('b24_itsolution.BUser', on_delete=models.PROTECT, blank=True, null=True)  # Field name made lowercase.
     author_name = models.CharField(db_column='AUTHOR_NAME', max_length=255, blank=True, null=True)  # Field name made lowercase.
     author_email = models.CharField(db_column='AUTHOR_EMAIL', max_length=255, blank=True, null=True)  # Field name made lowercase.
     author_ip = models.CharField(db_column='AUTHOR_IP', max_length=255, blank=True, null=True)  # Field name made lowercase.
