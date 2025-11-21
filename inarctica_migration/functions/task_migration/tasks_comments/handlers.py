@@ -4,6 +4,7 @@ from inarctica_migration.functions.task_migration.bx_rest_request import bx_task
 from inarctica_migration.functions.task_migration.fields import SYSTEM_COMMNETS
 from inarctica_migration.models import User
 from inarctica_migration.utils import CloudBitrixToken
+from integration_utils.bitrix24.exceptions import BitrixApiError
 
 
 def _is_system_comment(text: str) -> bool:
@@ -36,7 +37,13 @@ def get_comments_to_migration(cloud_token: CloudBitrixToken, task_id: int) -> di
     """
 
     params = {"TASK_ID": task_id, "ORDER": {"ID": "ASC"}}
-    all_comments = bx_task_commentitem_getlist(cloud_token, params)
+    try:
+        all_comments = bx_task_commentitem_getlist(cloud_token, params)
+    except BitrixApiError as exc:
+        if exc.error_description == "TASKS_ERROR_EXCEPTION_#8; Action failed; 8/TE/ACTION_FAILED_TO_BE_PROCESSED<br>":
+            return dict()
+        else:
+            raise
 
     # Получаем только пользовательские комментарии (без системных)
     comments_to_migrate: dict[int, dict] = dict()
