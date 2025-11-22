@@ -1,16 +1,13 @@
 from typing import Dict, Tuple, List
 
-from inarctica_migration.functions.log_migration.debug_messages import error_log_message, success_log_message
 from inarctica_migration.models import LogMigration, User, Group
 from inarctica_migration.utils import CloudBitrixToken, BoxBitrixToken
 
 from inarctica_migration.functions.helpers import debug_point
 from inarctica_migration.functions.log_migration.bx_rest_requests import bx_log_blogpost_add
 from inarctica_migration.functions.log_migration.handlers import (
-    init_blogpost_into_db,
-    get_sorted_by_time_blogposts,
-    get_files_base64,
-    get_files_links, clean_title, clean_detail_text,
+    get_files_base64, get_files_links,
+    clean_title, clean_detail_text,
 )
 
 def left_from_all_groups():
@@ -61,7 +58,7 @@ def get_structure_by_blogpost_ids(all_blogposts_by_dest):
             continue
 
         for blogpost in blogposts:
-            result[int(blogpost["ID"])] = (group_id, blogpost)
+            result[int(blogpost["ID"])] = (int(group_id), blogpost)
             blogpost_in_groups.append(int(blogpost["ID"]))
 
     ua_blogposts = all_blogposts_by_dest["UA"]
@@ -83,7 +80,7 @@ def migrate_blogposts():
     migrated_blogposts_ids: List[int] = list(LogMigration.objects.filter(is_synced=True).values_list("cloud_id", flat=True))
 
     all_blogposts_by_dest: Dict[str, dict] = get_all_blogposts_by_dest(cloud_token, migrated_group_map.keys())
-    prepared_blog_posts: Dict[int, Tuple[int, Dict]] = get_structure_by_blogpost_ids(all_blogposts_by_dest)
+    prepared_blog_posts: Dict[int, Tuple[int | str, Dict]] = get_structure_by_blogpost_ids(all_blogposts_by_dest)
 
     for blogpost_id in sorted(prepared_blog_posts.keys()):
         if blogpost_id in migrated_blogposts_ids:
@@ -126,5 +123,5 @@ def migrate_blogposts():
                     )
 
     debug_point("Миграция блогпостов окончена\n"
-                f"На облаке {len(prepared_blog_posts)}"
-                f"На коробке {len(LogMigration.objects.all().count())}")
+                f"На облаке: {len(prepared_blog_posts)}\n"
+                f"На коробке: {LogMigration.objects.all().count()}\n")
