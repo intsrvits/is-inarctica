@@ -105,4 +105,4 @@ def bx_task_commentitem_add(
     https://apidocs.bitrix24.ru/api-reference/tasks/comment-item/task-comment-item-add.html
     """
 
-    return token.call_list_method("task.commentitem.add", params, timeout=100)
+    return token.call_api_method("task.commentitem.add", params, timeout=100)["result"]

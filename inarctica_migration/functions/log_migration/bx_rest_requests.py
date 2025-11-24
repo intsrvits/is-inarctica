@@ -27,7 +27,7 @@ def bx_log_blogpost_add(
     https://apidocs.bitrix24.ru/api-reference/log/log-blogpost-add.html
     """
 
-    return token.call_api_method("log.blogpost.add", params, timeout=100)
+    return token.call_api_method("log.blogpost.add", params, timeout=500)
 
 
 @retry_decorator(attempts=3, delay=30)
