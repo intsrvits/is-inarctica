@@ -2,6 +2,7 @@ from inarctica_migration.utils import CloudBitrixToken, BoxBitrixToken
 from inarctica_migration.models import Group, TaskMigration, User, StageMigration
 
 from inarctica_migration.functions.helpers import debug_point
+from inarctica_migration.functions.task_migration.constants import TASK_USERFIELDS_MAP, CLOUD_TASK_USERFIELDS, BOX_TASK_USERFIELDS
 from inarctica_migration.functions.task_migration.entity_matchers import match_users
 from inarctica_migration.functions.task_migration.bx_rest_request import bx_tasks_task_list, bx_task_stages_get, bx_task_stages_update, bx_task_stages_add
 from inarctica_migration.functions.task_migration.fields import (task_fields_map,
@@ -33,9 +34,12 @@ def _params_for_tasks(input_params: dict, users_map: dict, group_map, stage_map,
         else:  # В остальных случаях в респонсе должен быть str
             output_params["fields"][field_upper] = match_users((_safe_int(input_params[field_camel])), users_map)
 
+    for cloud_task_userfield, box_task_userfield in TASK_USERFIELDS_MAP.items():
+        output_params["fields"][BOX_TASK_USERFIELDS[box_task_userfield]] = input_params.get(cloud_task_userfield)
+
     # Перезаписываем поле GROUP_ID на его группу-двойника с коробки.
     # Если в респонсе пришёл groupId="0" или None, то оставляем задач без привязки к группе.
-    output_params["fields"]["GROUP_ID"] = group_map[int(input_params["groupId"])] if (input_params["groupId"] and input_params["groupId"] != "0") else None
+    output_params["fields"]["GROUP_ID"] = group_map.get(int(input_params["groupId"])) if (input_params["groupId"] and input_params["groupId"] != "0") else None
     output_params["fields"]["STAGE_ID"] = stage_map.get(int(input_params["stageId"]), 0) if int(input_params["stageId"]) != 0 else 0
     output_params["fields"]["PARENT_ID"] = tasks_cloud_box_id_map[_safe_int(input_params["parentId"])] if _safe_int(input_params["parentId"]) else 0
     return output_params
@@ -61,27 +65,19 @@ def migration_tasks_to_box():
     cloud_token = CloudBitrixToken()
     params = {
         # "filter": {"!GROUP_ID": 0},
-        "select": ["ID", *task_fields_in_upper, *task_user_fields_in_upper, "UF_TASK_WEBDAV_FILES"]
+        "select": ["ID", *task_fields_in_upper, *task_user_fields_in_upper, "UF_TASK_WEBDAV_FILES", *list(CLOUD_TASK_USERFIELDS.keys())]
     }
     all_cloud_tasks = bx_tasks_task_list(cloud_token, params=params)
 
     batch_result = None
     processed_tasks_ids = set()
 
-    cnt = 75
     try:
+
         with_files_map = {}
 
         for task in all_cloud_tasks:
-            if not cnt:
-                continue
 
-            # fixme Удалённая группа
-            if task["groupId"] == "43":
-                continue
-
-            if task['id'] == "23823":
-                pass
 
             # Условие, чтобы пропускать дублирующие сущности с теми же параметрами. Работает в рамках одной миграции
             is_processed: bool = int(task["id"]) in processed_tasks_ids
@@ -105,7 +101,6 @@ def migration_tasks_to_box():
             params = _params_for_tasks(task, user_map, migrated_group_ids, stage_map, tasks_cloud_box_id_map)
             methods.append((str(task['id']), "tasks.task.add", params))
             processed_tasks_ids.add(int(task['id']))
-            cnt -= 1
 
         if methods:
             batch_result = box_token.batch_api_call(
