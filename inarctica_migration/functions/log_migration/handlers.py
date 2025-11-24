@@ -9,6 +9,7 @@ from inarctica_migration.utils import CloudBitrixToken, BoxBitrixToken
 from inarctica_migration.models import User
 from inarctica_migration.functions.helpers import execution_time_counter
 from inarctica_migration.functions.log_migration.bx_rest_requests import bx_disk_attachedObject_get, bx_log_blogpost_get
+from integration_utils.bitrix24.exceptions import BitrixApiError
 
 
 # ==================================
@@ -96,11 +97,17 @@ def get_files_links(
     """"""
     files_links = []
     for file_id in files_ids:
-        get_file_result = bx_disk_attachedObject_get(
-            token=token,
-            params={"id": file_id}
-        )
-        files_links.append((get_file_result["result"]["NAME"], get_file_result["result"]["DOWNLOAD_URL"]))
+        try:
+            get_file_result = bx_disk_attachedObject_get(
+                token=token,
+                params={"id": file_id}
+            )
+            files_links.append((get_file_result["result"]["NAME"], get_file_result["result"]["DOWNLOAD_URL"]))
+        except BitrixApiError as exc:
+            if exc.error == "ERROR_NOT_FOUND":
+                pass
+            else:
+                raise
 
     return files_links
 
